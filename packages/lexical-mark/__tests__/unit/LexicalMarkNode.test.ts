@@ -259,7 +259,7 @@ describe('LexicalMarkNode tests', () => {
     });
     // https://github.com/facebook/lexical/issues/5606
     describe('$wrapSelectionInMarkNode with a partly selected link', () => {
-      // Renders the paragraph as eg. `before|mark[be]|link[mark[li],nk]`
+      // Renders the paragraph as eg. `bef,mark[ore ],link[mark[li],nk], after`
       function $describe(node: LexicalNode): string {
         if ($isTextNode(node)) {
           return node.getTextContent();
