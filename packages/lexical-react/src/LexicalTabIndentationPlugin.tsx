@@ -13,6 +13,8 @@ import {
 import {useLexicalComposerContext} from '@lexical/react/LexicalComposerContext';
 import {useEffect, useRef} from 'react';
 
+import useLayoutEffect from './shared/useLayoutEffect';
+
 export {registerTabIndentation};
 
 /**
@@ -38,9 +40,9 @@ export function TabIndentationPlugin({
   // Registering re-checks the whole document against maxIndent, so keep the
   // latest $canIndent in a ref instead of re-registering when it changes.
   const $canIndentRef = useRef($canIndent);
-  useEffect(() => {
+  useLayoutEffect(() => {
     $canIndentRef.current = $canIndent;
-  }, [$canIndent]);
+  });
   useEffect(() => {
     return registerTabIndentation(editor, maxIndent, node => {
       const $currentCanIndent = $canIndentRef.current;

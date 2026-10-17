@@ -45,7 +45,7 @@ describe('TabIndentationPlugin', () => {
     $canIndent,
     editorRef,
   }: {
-    $canIndent: (node: ElementNode) => boolean;
+    $canIndent?: (node: ElementNode) => boolean;
     editorRef: React.RefObject<LexicalEditor>;
   }) {
     return (
@@ -111,9 +111,7 @@ describe('TabIndentationPlugin', () => {
     const editorRef =
       createRef<LexicalEditor>() as React.RefObject<LexicalEditor>;
     await act(async () => {
-      reactRoot.render(
-        <App $canIndent={node => node.canIndent()} editorRef={editorRef} />,
-      );
+      reactRoot.render(<App editorRef={editorRef} />);
     });
     const editor = editorRef.current;
     assert(editor !== null, 'Expected an editor');
