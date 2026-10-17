@@ -12,6 +12,7 @@ import {$isListItemNode, ListExtension} from '@lexical/list';
 import {RichTextExtension} from '@lexical/rich-text';
 import {
   $createParagraphNode,
+  $createTextNode,
   $getRoot,
   $getSelection,
   $isElementNode,
@@ -114,6 +115,65 @@ const indentedBlocksHTML =
   '<h1 data-lexical-indent="9">heading</h1>';
 
 describe('TabIndentationExtension maxIndent on paste (#5170)', () => {
+  test('clamps an over-indented initial editor state', () => {
+    using editor = buildEditorFromExtensions(
+      defineExtension({
+        $initialEditorState: () => {
+          $getRoot().append(
+            $createParagraphNode().setIndent(1).append($createTextNode('one')),
+            $createParagraphNode().setIndent(9).append($createTextNode('nine')),
+          );
+        },
+        dependencies: [
+          RichTextExtension,
+          configExtension(TabIndentationExtension, {maxIndent: 4}),
+        ],
+        name: 'IndentationLimitsInitialState',
+      }),
+    );
+    expect(editor.read(() => $blocks())).toEqual([
+      {indent: 1, text: 'one', type: 'paragraph'},
+      {indent: 3, text: 'nine', type: 'paragraph'},
+    ]);
+  });
+
+  test('clamps an over-indented state set with setEditorState', () => {
+    using editor = createEditor(4);
+    const json = JSON.stringify({
+      root: {
+        children: [
+          {
+            children: [
+              {
+                detail: 0,
+                format: 0,
+                mode: 'normal',
+                style: '',
+                text: 'deep',
+                type: 'text',
+                version: 1,
+              },
+            ],
+            direction: null,
+            format: '',
+            indent: 7,
+            type: 'paragraph',
+            version: 1,
+          },
+        ],
+        direction: null,
+        format: '',
+        indent: 0,
+        type: 'root',
+        version: 1,
+      },
+    });
+    editor.setEditorState(editor.parseEditorState(json));
+    expect(editor.read(() => $blocks())).toEqual([
+      {indent: 3, text: 'deep', type: 'paragraph'},
+    ]);
+  });
+
   test('clamps a pasted nested list without losing items', () => {
     using editor = createEditor(4);
     paste(editor, nestedListHTML(6));

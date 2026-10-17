@@ -73,9 +73,12 @@ function $defaultCanIndent(node: ElementNode) {
 }
 
 /**
- * Indentation from anywhere other than the indent command (eg. pasted
- * content) must stay below maxIndent too (#5170), so clamp it with a
- * transform on every block element type that may be indented.
+ * Indentation from anywhere other than the indent command must stay below
+ * maxIndent too (#5170), so clamp it with a transform on every block element
+ * type that may be indented. This applies to all content, not only pastes:
+ * the initial or loaded editor state, `setEditorState`, collaboration
+ * updates and nodes inserted from code. Registering marks every element
+ * dirty, so the whole document is checked (and clamped) once at that point.
  */
 function registerMaxIndentTransforms(
   editor: LexicalEditor,
@@ -101,9 +104,10 @@ function registerMaxIndentTransforms(
 /**
  * Registers a `KEY_TAB_COMMAND` handler that makes Tab and Shift+Tab indent and
  * outdent block elements (and otherwise insert a tab). Pass `maxIndent` to cap
- * the indent depth (indents below `maxIndent`), including indentation that
- * arrives some other way such as a paste, and `$canIndent` to control which
- * elements may be indented.
+ * the indent depth (indents below `maxIndent`), and `$canIndent` to control
+ * which elements may be indented. The `maxIndent` cap applies to any content,
+ * including pastes, loaded state, `setEditorState` and collaboration updates;
+ * deeper indents already in the document are clamped once on registration.
  *
  * @returns A cleanup function that unregisters the handler.
  */
@@ -116,23 +120,27 @@ export function registerTabIndentation(
 ) {
   const $getCanIndent = () =>
     typeof $canIndent === 'function' ? $canIndent : $canIndent.peek();
+  let unregisterClamp: () => void;
+  if (typeof maxIndent === 'number') {
+    unregisterClamp = maxIndent
+      ? registerMaxIndentTransforms(editor, maxIndent, $getCanIndent)
+      : () => {};
+  } else if (maxIndent) {
+    unregisterClamp = effect(() => {
+      const currentMaxIndent = maxIndent.value;
+      if (currentMaxIndent) {
+        return registerMaxIndentTransforms(
+          editor,
+          currentMaxIndent,
+          $getCanIndent,
+        );
+      }
+    });
+  } else {
+    unregisterClamp = () => {};
+  }
   return mergeRegister(
-    typeof maxIndent === 'number'
-      ? maxIndent
-        ? registerMaxIndentTransforms(editor, maxIndent, $getCanIndent)
-        : () => {}
-      : maxIndent
-        ? effect(() => {
-            const currentMaxIndent = maxIndent.value;
-            if (currentMaxIndent) {
-              return registerMaxIndentTransforms(
-                editor,
-                currentMaxIndent,
-                $getCanIndent,
-              );
-            }
-          })
-        : () => {},
+    unregisterClamp,
     editor.registerCommand(
       KEY_TAB_COMMAND,
       event => {
