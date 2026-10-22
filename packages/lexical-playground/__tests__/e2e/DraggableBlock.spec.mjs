@@ -210,13 +210,8 @@ test.describe('DraggableBlock', () => {
   });
 
   test('Drag-selecting text over the block menu does not extend the selection past the pointer (#9389)', async ({
-    browserName,
     page,
   }) => {
-    test.skip(
-      browserName === 'firefox',
-      'Firefox does not resolve the selection into the menu',
-    );
     await focusEditor(page);
     await page.keyboard.type('Paragraph 1');
     await page.keyboard.press('Enter');

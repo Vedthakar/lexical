@@ -382,14 +382,22 @@ function useDraggableBlockMenu(
         }
         const pointerEvents = menuElem.style.pointerEvents;
         menuElem.style.pointerEvents = 'none';
-        // The button may be released anywhere, not only over the editor.
+        // The button may be released anywhere, not only over the editor, and
+        // the release is lost if the window loses focus mid-drag.
         const removeListeners = registerEventListeners(doc, {
           pointercancel: onPointerUp,
           pointerup: onPointerUp,
         });
+        const win = doc.defaultView;
+        if (win !== null) {
+          win.addEventListener('blur', onPointerUp);
+        }
         restore = () => {
           menuElem.style.pointerEvents = pointerEvents;
           removeListeners();
+          if (win !== null) {
+            win.removeEventListener('blur', onPointerUp);
+          }
         };
       }
       const removePointerDown = registerEventListeners(rootElement, {
