@@ -1098,7 +1098,10 @@ export function getCodeSpanDelimiter(content: string): {
   const needsPadding =
     content.length === 0 ||
     content.includes('`') ||
-    (/^\s/.test(content) && /\s$/.test(content));
+    // A reader strips a space from each end only when the content is not all
+    // spaces (https://spec.commonmark.org/0.31.2/#code-spans), so padding
+    // content of only spaces would grow it by two spaces on every round trip.
+    (/^\s/.test(content) && /\s$/.test(content) && /[^ ]/.test(content));
   const padded = needsPadding ? ` ${content} ` : content;
   return {fence, padded};
 }
