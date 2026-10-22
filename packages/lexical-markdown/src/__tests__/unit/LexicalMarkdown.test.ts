@@ -408,6 +408,36 @@ describe('Markdown', () => {
       md: '25. Hello\n26. world',
     },
     {
+      // An ordered list may use `)` after the number (#9402), and keeps it.
+      html: '<ol><li value="1"><span style="white-space: pre-wrap;">Hello</span></li><li value="2"><span style="white-space: pre-wrap;">world</span></li></ol>',
+      md: '1) Hello\n2) world',
+      // The HTML doesn't carry the delimiter, so export writes `.`.
+      mdAfterExport: '1. Hello\n2. world',
+    },
+    {
+      html: '<ol start="3"><li value="3"><span style="white-space: pre-wrap;">Hello</span></li><li value="4"><span style="white-space: pre-wrap;">world</span></li></ol>',
+      md: '3) Hello\n4) world',
+      // The HTML doesn't carry the delimiter, so export writes `.`.
+      mdAfterExport: '3. Hello\n4. world',
+    },
+    {
+      html: '<ol><li value="1"><span style="white-space: pre-wrap;">a</span><ul><li value="1"><span style="white-space: pre-wrap;">b</span></li></ul></li><li value="2"><span style="white-space: pre-wrap;">c</span></li></ol>',
+      md: '1) a\n    - b\n2) c',
+      // The HTML doesn't carry the delimiter, so export writes `.`.
+      mdAfterExport: '1. a\n    - b\n2. c',
+    },
+    {
+      html: '<ul><li value="1"><span style="white-space: pre-wrap;">a</span><ol><li value="1"><span style="white-space: pre-wrap;">b</span></li></ol></li></ul>',
+      md: '- a\n    1) b',
+      // The HTML doesn't carry the delimiter, so export writes `.`.
+      mdAfterExport: '- a\n    1. b',
+    },
+    {
+      // A bullet item whose text starts like a `)` list item is escaped.
+      html: '<ul><li value="1"><span style="white-space: pre-wrap;">1) foo</span></li></ul>',
+      md: '- 1\\) foo',
+    },
+    {
       // ...including a check list among the sublist types.
       customTransformers: [CHECK_LIST],
       html: '<ol><li value="1"><span style="white-space: pre-wrap;">item one</span></li><li value="2"><span style="white-space: pre-wrap;">item two</span><ul><li value="1"><span style="white-space: pre-wrap;">sublist</span></li></ul><ol><li value="1"><span style="white-space: pre-wrap;">sublist</span></li></ol><ul __lexicallisttype="check"><li role="checkbox" tabindex="-1" aria-checked="false" value="1"><span style="white-space: pre-wrap;">checklist</span></li></ul></li></ol>',
@@ -1441,6 +1471,24 @@ describe('Markdown', () => {
       expect($isQuoteNode(quote)).toBe(true);
       expect(quote?.getTextContent()).toBe('```');
     });
+  });
+
+  it('keeps the `)` delimiter of an ordered list on export (#9402)', () => {
+    for (const md of [
+      '1) Hello\n2) world',
+      '3) Hello\n4) world',
+      '1) a\n    - b\n2) c',
+      '- a\n    1) b',
+      '1. Hello\n2. world',
+    ]) {
+      const editor = createTestEditor();
+      editor.update(() => $convertFromMarkdownString(md, TRANSFORMERS), {
+        discrete: true,
+      });
+      expect(editor.read(() => $convertToMarkdownString(TRANSFORMERS))).toBe(
+        md,
+      );
+    }
   });
 
   it('can round-trip nested fenced code blocks (4 backticks wrapping 3 backticks)', () => {
@@ -3489,6 +3537,7 @@ describe('Typed sublist shortcuts', () => {
   // same shapes.
   it.each([
     ['1. ', '<ol><li value="1"></li></ol>'],
+    ['1) ', '<ol><li value="1"></li></ol>'],
     ['    1. ', '<ol><li value="1"><ol><li value="1"></li></ol></li></ol>'],
     ['- ', '<ul><li value="1"></li></ul>'],
     ['    - ', '<ul><li value="1"><ul><li value="1"></li></ul></li></ul>'],
