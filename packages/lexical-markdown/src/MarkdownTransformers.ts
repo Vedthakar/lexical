@@ -217,7 +217,7 @@ export type TextMatchTransformer = Readonly<{
   type: 'text-match';
 }>;
 
-const ORDERED_LIST_REGEX = /^(\s*)(\d{1,})\.\s/;
+const ORDERED_LIST_REGEX = /^(\s*)(\d{1,})([.)])\s/;
 const UNORDERED_LIST_REGEX = /^(\s*)[-*+]\s/;
 const CHECK_LIST_REGEX = /^(\s*)(?:[-*+]\s)?\s?(\[(\s|x)?\])\s/i;
 const HEADING_REGEX = /^(#{1,6})\s/;
@@ -282,7 +282,7 @@ const ENDS_WITH = (regex: RegExp) =>
   new RegExp(`(?:${regex.source})$`, regex.flags);
 
 export const listMarkerState = createState('mdListMarker', {
-  parse: v => (typeof v === 'string' && /^[-*+]$/.test(v) ? v : '-'),
+  parse: v => (typeof v === 'string' && /^[-*+)]$/.test(v) ? v : '-'),
   resetOnCopyNode: true,
 });
 
@@ -603,11 +603,15 @@ const listReplace = (listType: ListType): ElementTransformer['replace'] => {
       listType === 'check' ? /^x$/i.test(match[3] || '') : undefined,
     );
     const firstMatchChar = match[0].trim()[0];
+    // An ordered list keeps only a `)` delimiter, as `.` is its default.
     const listMarker =
-      (listType === 'bullet' || listType === 'check') &&
-      firstMatchChar === listMarkerState.parse(firstMatchChar)
-        ? firstMatchChar
-        : undefined;
+      listType === 'number'
+        ? match[3] === ')'
+          ? ')'
+          : undefined
+        : firstMatchChar === listMarkerState.parse(firstMatchChar)
+          ? firstMatchChar
+          : undefined;
     // A block of another kind closes every level above this line. Blank lines
     // do not: they only make the list loose, and a blank line must not decide
     // how the line after it is read, or the same sublist would be read one way
@@ -769,15 +773,18 @@ const $listExport = (
       const indent = ' '.repeat(depth * LIST_INDENT_SIZE);
       const listType = listNode.getListType();
       const listMarker = $getState(listNode, listMarkerState);
+      // `)` is only a valid marker for ordered lists; a list that was retyped
+      // (e.g. with setListType) keeps its state, so fall back to `-`.
+      const bulletMarker = listMarker === ')' ? '-' : listMarker;
       const prefix =
         listType === 'number'
-          ? `${listNode.getStart() + index}. `
+          ? `${listNode.getStart() + index}${listMarker === ')' ? ')' : '.'} `
           : listType === 'check'
-            ? `${listMarker} [${listItemNode.getChecked() ? 'x' : ' '}] `
-            : listMarker + ' ';
+            ? `${bulletMarker} [${listItemNode.getChecked() ? 'x' : ' '}] `
+            : bulletMarker + ' ';
       let childrenText = exportChildren(listItemNode);
       if (listType !== 'number') {
-        childrenText = childrenText.replace(/^(\s{0,3}\d+)(\.\s)/, '$1\\$2');
+        childrenText = childrenText.replace(/^(\s{0,3}\d+)([.)]\s)/, '$1\\$2');
       }
       output.push(indent + prefix + childrenText);
       index++;
