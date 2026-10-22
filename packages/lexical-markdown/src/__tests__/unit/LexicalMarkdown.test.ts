@@ -1491,6 +1491,33 @@ describe('Markdown', () => {
     }
   });
 
+  it('exports a `)` list with any `)` item using `)` (#9402)', () => {
+    // Only `)` is stored on the list, so one `)` item is enough.
+    for (const md of ['1) a\n2. b', '1. a\n2) b']) {
+      const editor = createTestEditor();
+      editor.update(() => $convertFromMarkdownString(md, TRANSFORMERS), {
+        discrete: true,
+      });
+      expect(editor.read(() => $convertToMarkdownString(TRANSFORMERS))).toBe(
+        '1) a\n2) b',
+      );
+    }
+  });
+
+  it('does not export `)` as a bullet marker after setListType (#9402)', () => {
+    const editor = createTestEditor();
+    editor.update(
+      () => {
+        $convertFromMarkdownString('1) a\n2) b', TRANSFORMERS);
+        $getRoot().getFirstChildOrThrow<ListNode>().setListType('bullet');
+      },
+      {discrete: true},
+    );
+    expect(editor.read(() => $convertToMarkdownString(TRANSFORMERS))).toBe(
+      '- a\n- b',
+    );
+  });
+
   it('can round-trip nested fenced code blocks (4 backticks wrapping 3 backticks)', () => {
     const markdown =
       '````markdown\n' +

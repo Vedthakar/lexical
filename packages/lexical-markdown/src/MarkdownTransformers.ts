@@ -773,12 +773,15 @@ const $listExport = (
       const indent = ' '.repeat(depth * LIST_INDENT_SIZE);
       const listType = listNode.getListType();
       const listMarker = $getState(listNode, listMarkerState);
+      // `)` is only a valid marker for ordered lists; a list that was retyped
+      // (e.g. with setListType) keeps its state, so fall back to `-`.
+      const bulletMarker = listMarker === ')' ? '-' : listMarker;
       const prefix =
         listType === 'number'
           ? `${listNode.getStart() + index}${listMarker === ')' ? ')' : '.'} `
           : listType === 'check'
-            ? `${listMarker} [${listItemNode.getChecked() ? 'x' : ' '}] `
-            : listMarker + ' ';
+            ? `${bulletMarker} [${listItemNode.getChecked() ? 'x' : ' '}] `
+            : bulletMarker + ' ';
       let childrenText = exportChildren(listItemNode);
       if (listType !== 'number') {
         childrenText = childrenText.replace(/^(\s{0,3}\d+)([.)]\s)/, '$1\\$2');
