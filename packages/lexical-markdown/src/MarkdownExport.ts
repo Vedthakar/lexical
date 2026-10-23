@@ -538,6 +538,8 @@ function exportTextFormat(
   const nextNode = getTextSibling(node, false);
 
   const applied = new Set();
+  // the tags opened by this node, before they are added to unclosedTags
+  const openedTags: {format: TextFormatType; tag: string}[] = [];
 
   for (const transformer of textTransformers) {
     const format = transformer.format[0];
@@ -568,10 +570,34 @@ function exportTextFormat(
         !checkHasFormat(prevNode, format) ||
         !unclosedTags.find(element => element.tag === tag)
       ) {
-        unclosedTags.push({format, tag});
-        openingTags += tag;
+        openedTags.push({format, tag});
       }
     }
+  }
+
+  // Open the format that continues furthest into the following siblings
+  // first, so that a format which ends sooner is nested inside it and can be
+  // closed without closing (and reopening) the others. Otherwise
+  // `***a**: b*` would be exported as `***a****: b*`.
+  if (openedTags.length > 1) {
+    const extent = new Map<TextFormatType, number>();
+    for (const {format} of openedTags) {
+      let count = 0;
+      let sibling = nextNode;
+      while (hasFormat(sibling, format)) {
+        count++;
+        sibling = getTextSibling(sibling as TextNode, false);
+      }
+      extent.set(format, count);
+    }
+    // Array.prototype.sort is stable, so ties keep the transformer order.
+    openedTags.sort(
+      (a, b) => (extent.get(b.format) || 0) - (extent.get(a.format) || 0),
+    );
+  }
+  for (const openedTag of openedTags) {
+    unclosedTags.push(openedTag);
+    openingTags += openedTag.tag;
   }
 
   // close any tags in the same order they were applied, if necessary

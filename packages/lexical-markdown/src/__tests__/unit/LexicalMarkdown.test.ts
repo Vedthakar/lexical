@@ -608,6 +608,7 @@ describe('Markdown', () => {
     {
       html: '<p><s><b><strong style="white-space: pre-wrap;">Hello </strong></b></s><s><i><b><strong style="white-space: pre-wrap;">world</strong></b></i></s><s><span style="white-space: pre-wrap;">!</span></s></p>',
       md: '**~~Hello *world*~~**~~!~~',
+      mdAfterExport: '~~**Hello *world***!~~',
     },
     {
       html: '<p><i><em style="white-space: pre-wrap;">Hello </em></i><i><b><strong style="white-space: pre-wrap;">world</strong></b></i><i><em style="white-space: pre-wrap;">!</em></i></p>',
@@ -1025,7 +1026,7 @@ describe('Markdown', () => {
     {
       html: '<p><s><b><strong style="white-space: pre-wrap;">Hello </strong></b></s><s><i><b><strong style="white-space: pre-wrap;">world</strong></b></i></s><s><span style="white-space: pre-wrap;">!</span></s></p>',
       md: '**~~Hello&#32;*world*~~**~~!~~',
-      mdAfterExport: '**~~Hello *world*~~**~~!~~',
+      mdAfterExport: '~~**Hello *world***!~~',
     },
     {
       html: '<p><span style="white-space: pre-wrap;">!"#$%&amp;\'()*+,-./:;&lt;=&gt;?@[\\]^_`{|}~</span></p>',
