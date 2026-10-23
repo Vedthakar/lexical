@@ -202,6 +202,17 @@ describe('LexicalUtils tests', () => {
       expect(getTextDirection(`\uFEFC`)).toBe('rtl');
     });
 
+    test('getTextDirection() skips surrogate pairs such as emoji (#5260)', () => {
+      expect(getTextDirection('😀')).toBe(null);
+      expect(getTextDirection('😀 שלום')).toBe('rtl');
+      expect(getTextDirection('😀 مرحبا')).toBe('rtl');
+      expect(getTextDirection('😀😀 שלום')).toBe('rtl');
+      expect(getTextDirection('😀 hello')).toBe('ltr');
+      expect(getTextDirection('שלום 😀')).toBe('rtl');
+      expect(getTextDirection('\uD7FF')).toBe('ltr');
+      expect(getTextDirection('\uE000')).toBe('ltr');
+    });
+
     test('isExactShortcutMatch() matches by event.key for single-letter', () => {
       const eventWithoutUppercase = new KeyboardEvent('keydown', {
         code: 'KeyZ',

@@ -111,9 +111,13 @@ export const COMPOSITION_START_CHAR: string = IS_FIREFOX
   ? NON_BREAKING_SPACE
   : COMPOSITION_SUFFIX;
 const RTL = '\u0591-\u07FF\uFB1D-\uFDFD\uFE70-\uFEFC';
+// The surrogate range \uD800-\uDFFF is left out of LTR: these regexes match
+// UTF-16 code units, and a surrogate pair (such as an emoji) is not a strong
+// left-to-right character, so it must not decide the direction.
 const LTR =
   'A-Za-z\u00C0-\u00D6\u00D8-\u00F6' +
-  '\u00F8-\u02B8\u0300-\u0590\u0800-\u1FFF\u200E\u2C00-\uFB1C' +
+  '\u00F8-\u02B8\u0300-\u0590\u0800-\u1FFF\u200E\u2C00-\uD7FF' +
+  '\uE000-\uFB1C' +
   '\uFE00-\uFE6F\uFEFD-\uFFFF';
 
 /**
