@@ -11,6 +11,8 @@ import {buildEditorFromExtensions} from '@lexical/extension';
 import {$generateNodesFromDOM} from '@lexical/html';
 import {RichTextExtension} from '@lexical/rich-text';
 import {defineExtension, type LexicalEditor} from 'lexical';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
 import {describe, expect, onTestFinished, test} from 'vitest';
 
 // The legacy `importDOM` path ($generateNodesFromDOM without
@@ -98,5 +100,30 @@ describe('legacy HTML import of code copied from VS Code (#5569)', () => {
         ([type]) => type,
       ),
     ).not.toContain('code');
+  });
+
+  test('a line containing a tab keeps the tab inside the one code block', () => {
+    const nodes = importHTML(
+      `<div style="${STYLE}"><span>function f() {</span></div><div style="${STYLE}"><span>\treturn 1;</span></div><div style="${STYLE}"><span>}</span></div>`,
+    );
+    expect(nodes.map(([type]) => type)).toEqual(['code']);
+    expect(nodes[0][1]).toContain('\treturn 1;');
+    expect(nodes[0][1]).toMatch(/^function f\(\) \{\n+\treturn 1;\n+\}$/);
+  });
+
+  test('the unprettified Safari clipboard fixture becomes one code block', () => {
+    const html = fs.readFileSync(
+      path.resolve(
+        __dirname,
+        '../../../../../dev-examples/dom-import/src/fixtures/vscode-safari.html',
+      ),
+      'utf8',
+    );
+    const nodes = importHTML(html);
+    // The trailing body-level `<br class="Apple-interchange-newline">` is
+    // outside any block, so the legacy LineBreakNode filter keeps it; that
+    // is unrelated to this fix.
+    expect(nodes.map(([type]) => type)).toEqual(['code', 'linebreak']);
+    expect(nodes[0][1]).toContain('## 📱 iOS alpha four');
   });
 });
