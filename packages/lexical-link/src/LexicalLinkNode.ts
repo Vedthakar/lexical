@@ -6,6 +6,9 @@
  *
  */
 
+import type {LinkExtension} from './LexicalLinkExtension';
+
+import {getPeerDependencyFromEditor} from '@lexical/extension';
 import invariant from '@lexical/internal/invariant';
 import {
   $applyNodeReplacement,
@@ -75,13 +78,51 @@ export type SerializedLinkNode = Spread<
 
 type LinkHTMLElementType = HTMLAnchorElement | HTMLSpanElement;
 
-const SUPPORTED_URL_PROTOCOLS = new Set([
+const SUPPORTED_URL_PROTOCOLS: ReadonlySet<string> = new Set([
   'http:',
   'https:',
   'mailto:',
   'sms:',
   'tel:',
 ]);
+
+const configuredProtocols = new WeakMap<
+  readonly string[],
+  ReadonlySet<string>
+>();
+
+/**
+ * The protocols {@link LinkNode.sanitizeUrl} allows: the active editor's
+ * {@link LinkExtension} `allowedProtocols`, if configured, else the default.
+ */
+function $getAllowedProtocols(): ReadonlySet<string> {
+  let editor;
+  try {
+    editor = $getEditor();
+  } catch {
+    // Called outside of an editor update or read
+    return SUPPORTED_URL_PROTOCOLS;
+  }
+  const dep = getPeerDependencyFromEditor<typeof LinkExtension>(
+    editor,
+    '@lexical/link/Link',
+  );
+  const allowed = dep && dep.output.allowedProtocols.peek();
+  if (allowed === undefined) {
+    return SUPPORTED_URL_PROTOCOLS;
+  }
+  let protocols = configuredProtocols.get(allowed);
+  if (protocols === undefined) {
+    protocols = new Set(
+      allowed.map(protocol => {
+        const lower = protocol.toLowerCase();
+        return lower.endsWith(':') ? lower : `${lower}:`;
+      }),
+    );
+    configuredProtocols.set(allowed, protocols);
+  }
+  return protocols;
+}
 
 const linkNodeSchema = nodeSchema<LinkNode>()({
   // defaultAsNull preserves the legacy `value || null` semantics: an empty
@@ -199,12 +240,13 @@ export class LinkNode extends ElementNode {
   }
 
   sanitizeUrl(url: string): string {
+    const allowedProtocols = $getAllowedProtocols();
     const rawUrl = url;
     url = formatUrl(url);
     try {
       const parsedUrl = new URL(formatUrl(url));
 
-      if (!SUPPORTED_URL_PROTOCOLS.has(parsedUrl.protocol)) {
+      if (!allowedProtocols.has(parsedUrl.protocol)) {
         return 'about:blank';
       }
     } catch {
@@ -230,7 +272,7 @@ export class LinkNode extends ElementNode {
       const schemeMatch = normalizedUrl.match(/^([a-z][a-z0-9+.-]*):/i);
       if (
         schemeMatch != null &&
-        !SUPPORTED_URL_PROTOCOLS.has(`${schemeMatch[1].toLowerCase()}:`)
+        !allowedProtocols.has(`${schemeMatch[1].toLowerCase()}:`)
       ) {
         // An explicit, non-allowlisted scheme survived normalization (e.g.
         // `javascript:`, `data:`) — neutralize it. Inputs with no scheme

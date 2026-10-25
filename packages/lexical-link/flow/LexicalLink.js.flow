@@ -165,6 +165,7 @@ declare export function registerAutoLink(
 export type LinkConfig = {
   validateUrl: void | ((url: string) => boolean);
   attributes: void | LinkAttributes;
+  allowedProtocols: void | ReadonlyArray<string>;
 }
 declare export var LinkExtension: LexicalExtension<LinkConfig, "@lexical/link/Link", NamedSignalsOutput<LinkConfig>, void>;
 declare export function registerLink(

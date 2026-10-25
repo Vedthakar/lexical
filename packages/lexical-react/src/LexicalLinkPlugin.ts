@@ -37,7 +37,10 @@ export function LinkPlugin({validateUrl, attributes}: Props): null {
     }
   });
   useEffect(() => {
-    return registerLink(editor, namedSignals({attributes, validateUrl}));
+    return registerLink(
+      editor,
+      namedSignals({allowedProtocols: undefined, attributes, validateUrl}),
+    );
   }, [editor, validateUrl, attributes]);
 
   return null;
