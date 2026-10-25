@@ -54,9 +54,24 @@ export interface LinkConfig {
    * {@link TOGGLE_LINK_COMMAND}
    */
   attributes: undefined | LinkAttributes;
+  /**
+   * The URL protocols (e.g. `'https:'`, or `'obsidian:'` for an app link) that
+   * {@link LinkNode.sanitizeUrl} lets through. Any other protocol is rendered
+   * as `about:blank`. This list replaces the default, which is
+   * `['http:', 'https:', 'mailto:', 'sms:', 'tel:']`, so include those you
+   * still want. Matching ignores case, and a missing trailing `:` is added.
+   *
+   * `javascript:`, `data:` and `vbscript:` are always blocked, even if
+   * listed, since they can run script when the link is followed. Only allow
+   * other protocols you trust. The list is read when a link is rendered, so
+   * changing it does not re-check links until they re-render. The default
+   * of `undefined` uses the default list.
+   */
+  allowedProtocols: undefined | readonly string[];
 }
 
 const defaultProps: LinkConfig = {
+  allowedProtocols: undefined,
   attributes: undefined,
   validateUrl: undefined,
 };
