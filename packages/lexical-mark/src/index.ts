@@ -52,11 +52,22 @@ function $isFullySelected(node: ElementNode, selectedKeys: Set<NodeKey>) {
   );
 }
 
+/** Options for {@link $wrapSelectionInMarkNode} */
+export interface WrapSelectionInMarkNodeOptions {
+  /**
+   * If `true`, leave the editor's selection on the wrapped text instead of
+   * collapsing it at the end (or, for a backward selection, the start) of
+   * the last created mark node. Defaults to `false`.
+   */
+  preserveSelection?: boolean;
+}
+
 export function $wrapSelectionInMarkNode(
   selection: RangeSelection,
   isBackward: boolean,
   id: string,
   createNode?: (ids: string[]) => MarkNode,
+  options: WrapSelectionInMarkNodeOptions = {},
 ): void {
   // Force a forwards selection since append is used, ignore the argument.
   // A new selection is used to avoid side-effects of flipping the given
@@ -153,7 +164,7 @@ export function $wrapSelectionInMarkNode(
     }
   }
   // Make selection collapsed at the end
-  if ($isElementNode(lastCreatedMarkNode)) {
+  if (!options.preserveSelection && $isElementNode(lastCreatedMarkNode)) {
     if (isBackward) {
       lastCreatedMarkNode.selectStart();
     } else {

@@ -46,11 +46,16 @@ declare export function $getMarkIDs(
   offset: number,
 ): null | string[];
 
+export type WrapSelectionInMarkNodeOptions = {
+  preserveSelection?: boolean,
+};
+
 declare export function $wrapSelectionInMarkNode(
   selection: RangeSelection,
   isBackward: boolean,
   id: string,
   createNode?: (ids: string[]) => MarkNode,
+  options?: WrapSelectionInMarkNodeOptions,
 ): void;
 
 declare export function $unwrapMarkNode(node: MarkNode): void;

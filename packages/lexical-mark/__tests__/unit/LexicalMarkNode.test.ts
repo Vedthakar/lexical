@@ -19,8 +19,10 @@ import {
   $createTextNode,
   $getNodeByKey,
   $getRoot,
+  $getSelection,
   $isElementNode,
   $isParagraphNode,
+  $isRangeSelection,
   $isTextNode,
   $setSelection,
   type ElementNode,
@@ -81,6 +83,97 @@ describe('LexicalMarkNode tests', () => {
           expect(markNode.getFirstChildOrThrow().getTextContent()).toEqual(
             'marked',
           );
+        });
+      });
+
+      // https://github.com/facebook/lexical/issues/5421
+      describe('preserveSelection', () => {
+        function $wrapMiddleWord(
+          isBackward: boolean,
+          options?: {preserveSelection?: boolean},
+        ) {
+          const textNode = $createTextNode('unmarked marked unmarked');
+          $assertNodeType($getRoot().getFirstChild(), $isParagraphNode).append(
+            textNode,
+          );
+          const selection = $createRangeSelection();
+          const [anchor, focus] = isBackward
+            ? [selection.focus, selection.anchor]
+            : [selection.anchor, selection.focus];
+          anchor.set(textNode.getKey(), 'unmarked '.length, 'text');
+          focus.set(textNode.getKey(), 'unmarked marked'.length, 'text');
+          $setSelection(selection);
+          $wrapSelectionInMarkNode(
+            selection,
+            isBackward,
+            'my-id',
+            undefined,
+            options,
+          );
+          const after = $getSelection();
+          assert($isRangeSelection(after), 'expected a RangeSelection');
+          return after;
+        }
+
+        for (const isBackward of [false, true]) {
+          test(`keeps the ${isBackward ? 'backward ' : ''}selection on the marked text`, () => {
+            testEnv.editor.update(() => {
+              const selection = $wrapMiddleWord(isBackward, {
+                preserveSelection: true,
+              });
+              expect(selection.isCollapsed()).toBe(false);
+              expect(selection.isBackward()).toBe(isBackward);
+              expect(selection.getTextContent()).toBe('marked');
+              expect(
+                selection.getNodes().map(node => $isMarkNode(node.getParent())),
+              ).toEqual([true]);
+            });
+          });
+        }
+
+        test('keeps a selection spanning several text nodes', () => {
+          testEnv.editor.update(() => {
+            const paragraph = $assertNodeType(
+              $getRoot().getFirstChild(),
+              $isParagraphNode,
+            );
+            const first = $createTextNode('one ');
+            const second = $createTextNode('two').toggleFormat('bold');
+            const third = $createTextNode(' three');
+            paragraph.append(first, second, third);
+            const selection = $createRangeSelection();
+            selection.anchor.set(first.getKey(), 1, 'text');
+            selection.focus.set(third.getKey(), 3, 'text');
+            $setSelection(selection);
+            $wrapSelectionInMarkNode(selection, false, 'my-id', undefined, {
+              preserveSelection: true,
+            });
+
+            const after = $getSelection();
+            assert($isRangeSelection(after), 'expected a RangeSelection');
+            expect(after.isCollapsed()).toBe(false);
+            expect(after.getTextContent()).toBe('ne two th');
+            const nodes = after.getNodes();
+            expect(nodes.map(node => node.getTextContent())).toEqual([
+              'ne ',
+              'two',
+              ' th',
+            ]);
+            expect(nodes.every(node => $isMarkNode(node.getParent()))).toBe(
+              true,
+            );
+          });
+        });
+
+        test('by default, collapses the selection at the end of the mark', () => {
+          testEnv.editor.update(() => {
+            const selection = $wrapMiddleWord(false);
+            expect(selection.isCollapsed()).toBe(true);
+            expect($isMarkNode(selection.anchor.getNode().getParent())).toBe(
+              true,
+            );
+            expect(selection.anchor.offset).toBe('marked'.length);
+          });
         });
       });
 
