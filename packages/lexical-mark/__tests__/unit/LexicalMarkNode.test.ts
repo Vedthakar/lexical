@@ -131,6 +131,40 @@ describe('LexicalMarkNode tests', () => {
           });
         }
 
+        test('keeps a selection spanning several text nodes', () => {
+          testEnv.editor.update(() => {
+            const paragraph = $assertNodeType(
+              $getRoot().getFirstChild(),
+              $isParagraphNode,
+            );
+            const first = $createTextNode('one ');
+            const second = $createTextNode('two').toggleFormat('bold');
+            const third = $createTextNode(' three');
+            paragraph.append(first, second, third);
+            const selection = $createRangeSelection();
+            selection.anchor.set(first.getKey(), 1, 'text');
+            selection.focus.set(third.getKey(), 3, 'text');
+            $setSelection(selection);
+            $wrapSelectionInMarkNode(selection, false, 'my-id', undefined, {
+              preserveSelection: true,
+            });
+
+            const after = $getSelection();
+            assert($isRangeSelection(after), 'expected a RangeSelection');
+            expect(after.isCollapsed()).toBe(false);
+            expect(after.getTextContent()).toBe('ne two th');
+            const nodes = after.getNodes();
+            expect(nodes.map(node => node.getTextContent())).toEqual([
+              'ne ',
+              'two',
+              ' th',
+            ]);
+            expect(nodes.every(node => $isMarkNode(node.getParent()))).toBe(
+              true,
+            );
+          });
+        });
+
         test('by default, collapses the selection at the end of the mark', () => {
           testEnv.editor.update(() => {
             const selection = $wrapMiddleWord(false);
