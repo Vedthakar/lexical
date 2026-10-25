@@ -1982,6 +1982,7 @@ export class LexicalEditor {
     if (rootElement !== null) {
       // This ensures that iOS does not trigger caps lock upon focus
       rootElement.setAttribute('autocapitalize', 'off');
+      let isEmptyWithoutSelection = false;
       updateEditorSync(this, () => {
         const selection = $getSelection();
         const root = $getRoot();
@@ -1997,6 +1998,8 @@ export class LexicalEditor {
           } else {
             root.selectEnd();
           }
+        } else {
+          isEmptyWithoutSelection = true;
         }
         $addUpdateTag(FOCUS_TAG);
         $onUpdate(() => {
@@ -2006,6 +2009,13 @@ export class LexicalEditor {
           }
         });
       });
+      if (isEmptyWithoutSelection) {
+        // There is nothing to select yet (e.g. a collaborative editor before
+        // its document has synced), so focus the DOM instead. That lets a
+        // selection be created once content arrives, as the collaboration
+        // bootstrap does when the root element is focused.
+        rootElement.focus({preventScroll: true});
+      }
       // In the case where onUpdate doesn't fire (due to the focus update not
       // occurring).
       if (this._pendingEditorState === null) {

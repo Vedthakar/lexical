@@ -24,8 +24,11 @@ import {
   $createParagraphNode,
   $createTextNode,
   $getRoot,
+  $getSelection,
   $isParagraphNode,
+  $isRangeSelection,
   createEditor,
+  FORMAT_TEXT_COMMAND,
   UNDO_COMMAND,
 } from 'lexical';
 import {$assertNodeType} from 'lexical/src/__tests__/utils';
@@ -239,7 +242,7 @@ describe(`LexicalCollaborationPlugin`, () => {
    * `shouldBootstrap` path writes `initialEditorState` into it.
    */
   async function renderBootstrapped(
-    initialEditorState: InitialEditorStateType,
+    initialEditorState: InitialEditorStateType | undefined,
     {
       autoSync = true,
       onError,
@@ -301,6 +304,35 @@ describe(`LexicalCollaborationPlugin`, () => {
       },
     };
   }
+
+  // https://github.com/facebook/lexical/issues/5012
+  test(`editor.focus() before the bootstrap lets commands work without a click`, async () => {
+    const {editor, sync} = await renderBootstrapped(undefined, {
+      autoSync: false,
+    });
+    // e.g. AutoFocusPlugin, while the shared document is still empty
+    await act(async () => {
+      editor.focus();
+    });
+    await sync();
+
+    editor.getEditorState().read(() => {
+      const selection = $getSelection();
+      expect($isRangeSelection(selection)).toBe(true);
+      expect(selection!.getNodes()).toEqual([
+        $getRoot().getFirstChildOrThrow(),
+      ]);
+    });
+    await act(async () => {
+      editor.dispatchCommand(FORMAT_TEXT_COMMAND, 'bold');
+    });
+    editor.getEditorState().read(() => {
+      const selection = $getSelection();
+      expect($isRangeSelection(selection) && selection.hasFormat('bold')).toBe(
+        true,
+      );
+    });
+  });
 
   // https://github.com/facebook/lexical/issues/7110
   test(`the bootstrapped initialEditorState can not be undone`, async () => {

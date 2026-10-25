@@ -817,6 +817,25 @@ describe('LexicalEditor tests', () => {
     expect(fn).toHaveBeenCalledTimes(1);
   });
 
+  // https://github.com/facebook/lexical/issues/5012
+  it('editor.focus() on an empty root focuses the root element', async () => {
+    init();
+    const rootElement = editor.getRootElement()!;
+    expect(editor.getEditorState().read(() => $getRoot().isEmpty())).toBe(true);
+    expect(document.activeElement).not.toBe(rootElement);
+
+    let focusedInCallback: boolean | undefined;
+    const fn = vi.fn(() => {
+      focusedInCallback = document.activeElement === rootElement;
+    });
+    await editor.focus(fn);
+
+    expect(document.activeElement).toBe(rootElement);
+    expect(focusedInCallback).toBe(true);
+    expect(fn).toHaveBeenCalledTimes(1);
+    expect(rootElement.hasAttribute('autocapitalize')).toBe(false);
+  });
+
   it('Synchronously runs three transforms, two of them depend on the other', async () => {
     init();
 
