@@ -86,6 +86,17 @@ const SUPPORTED_URL_PROTOCOLS: ReadonlySet<string> = new Set([
   'tel:',
 ]);
 
+/**
+ * Protocols that can run script when a link is followed. They are never
+ * allowed, even if listed in {@link LinkConfig.allowedProtocols}.
+ */
+const BLOCKED_URL_PROTOCOLS: ReadonlySet<string> = new Set([
+  // eslint-disable-next-line no-script-url
+  'javascript:',
+  'data:',
+  'vbscript:',
+]);
+
 const configuredProtocols = new WeakMap<
   readonly string[],
   ReadonlySet<string>
@@ -114,10 +125,12 @@ function $getAllowedProtocols(): ReadonlySet<string> {
   let protocols = configuredProtocols.get(allowed);
   if (protocols === undefined) {
     protocols = new Set(
-      allowed.map(protocol => {
-        const lower = protocol.toLowerCase();
-        return lower.endsWith(':') ? lower : `${lower}:`;
-      }),
+      allowed
+        .map(protocol => {
+          const lower = protocol.toLowerCase();
+          return lower.endsWith(':') ? lower : `${lower}:`;
+        })
+        .filter(protocol => !BLOCKED_URL_PROTOCOLS.has(protocol)),
     );
     configuredProtocols.set(allowed, protocols);
   }

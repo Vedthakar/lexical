@@ -77,6 +77,24 @@ describe('LinkExtension allowedProtocols', () => {
     ).toEqual([OBSIDIAN, 'about:blank', 'about:blank']);
   });
 
+  test('javascript, data and vbscript protocols stay blocked even when listed', () => {
+    // eslint-disable-next-line no-script-url
+    using editor = buildEditor(['https:', 'javascript:', 'DATA', 'vbscript:']);
+    expect(
+      renderedHrefs(editor, [
+        JAVASCRIPT,
+        'data:text/html,<script>alert(1)</script>',
+        'VBScript:msgbox(1)',
+        'https://lexical.dev',
+      ]),
+    ).toEqual([
+      'about:blank',
+      'about:blank',
+      'about:blank',
+      'https://lexical.dev',
+    ]);
+  });
+
   test('unparseable URLs still fail closed for unlisted protocols', () => {
     using editor = buildEditor(['obsidian:']);
     editor.update(

@@ -61,9 +61,11 @@ export interface LinkConfig {
    * `['http:', 'https:', 'mailto:', 'sms:', 'tel:']`, so include those you
    * still want. Matching ignores case, and a missing trailing `:` is added.
    *
-   * Only allow protocols you trust: e.g. `javascript:` and `data:` can run
-   * script when the link is clicked. The default of `undefined` uses the
-   * default list.
+   * `javascript:`, `data:` and `vbscript:` are always blocked, even if
+   * listed, since they can run script when the link is followed. Only allow
+   * other protocols you trust. The list is read when a link is rendered, so
+   * changing it does not re-check links until they re-render. The default
+   * of `undefined` uses the default list.
    */
   allowedProtocols: undefined | readonly string[];
 }
