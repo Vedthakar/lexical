@@ -126,4 +126,12 @@ describe('createListTransformers indentSize (#2213)', () => {
       outline,
     });
   });
+
+  it('rejects an indent size that is not a positive integer', () => {
+    for (const indentSize of [0, -2, 1.5, NaN, Infinity]) {
+      expect(() => createListTransformers({indentSize})).toThrow(
+        'createListTransformers: indentSize must be a positive integer',
+      );
+    }
+  });
 });

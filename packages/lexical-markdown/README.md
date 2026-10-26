@@ -87,6 +87,37 @@ And bundles of commonly used transformers:
 
 Transformers are explicitly passed to markdown API allowing application-specific subset of markdown or custom transformers.
 
+The list transformers indent nested lists by 4 spaces per level. To use a different
+indent size (a positive integer), create them with `createListTransformers` and use
+them in place of `UNORDERED_LIST`, `ORDERED_LIST` and `CHECK_LIST`:
+
+```js
+import {
+  $convertToMarkdownString,
+  CHECK_LIST,
+  createListTransformers,
+  ORDERED_LIST,
+  TRANSFORMERS,
+  UNORDERED_LIST,
+} from '@lexical/markdown';
+
+const lists = createListTransformers({indentSize: 2});
+const MY_TRANSFORMERS = TRANSFORMERS.map((transformer) =>
+  transformer === UNORDERED_LIST
+    ? lists.UNORDERED_LIST
+    : transformer === ORDERED_LIST
+      ? lists.ORDERED_LIST
+      : transformer === CHECK_LIST
+        ? lists.CHECK_LIST
+        : transformer,
+);
+
+editor.update(() => {
+  // "- a\n  - b" rather than "- a\n    - b"
+  const markdown = $convertToMarkdownString(MY_TRANSFORMERS);
+});
+```
+
 There're three types of transformers:
 
 - **Element transformer** handles top level elements (lists, headings, quotes, tables or code blocks)

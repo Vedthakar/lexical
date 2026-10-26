@@ -7,6 +7,7 @@
  */
 
 import {$createCodeNode, $isCodeNode, CodeNode} from '@lexical/code-core';
+import invariant from '@lexical/internal/invariant';
 import {
   $createLinkNode,
   $isAutoLinkNode,
@@ -1056,8 +1057,8 @@ export const CODE: MultilineElementTransformer = {
 export interface ListTransformersOptions {
   /**
    * Spaces per nesting level, both written on export and read on import when
-   * a line's indent is not measured against the list item above it. Defaults
-   * to 4.
+   * a line's indent is not measured against the list item above it. Must be
+   * a positive integer; defaults to 4.
    */
   indentSize?: number;
 }
@@ -1078,6 +1079,11 @@ export function createListTransformers({
   ORDERED_LIST: ElementTransformer;
   UNORDERED_LIST: ElementTransformer;
 } {
+  invariant(
+    Number.isInteger(indentSize) && indentSize > 0,
+    'createListTransformers: indentSize must be a positive integer, got %s',
+    String(indentSize),
+  );
   const listTransformer = (
     listType: ListType,
     regExp: RegExp,
