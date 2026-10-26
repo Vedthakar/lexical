@@ -94,7 +94,6 @@ them in place of `UNORDERED_LIST`, `ORDERED_LIST` and `CHECK_LIST`:
 ```js
 import {
   $convertToMarkdownString,
-  CHECK_LIST,
   createListTransformers,
   ORDERED_LIST,
   TRANSFORMERS,
@@ -102,15 +101,18 @@ import {
 } from '@lexical/markdown';
 
 const lists = createListTransformers({indentSize: 2});
-const MY_TRANSFORMERS = TRANSFORMERS.map((transformer) =>
-  transformer === UNORDERED_LIST
-    ? lists.UNORDERED_LIST
-    : transformer === ORDERED_LIST
-      ? lists.ORDERED_LIST
-      : transformer === CHECK_LIST
-        ? lists.CHECK_LIST
+// `TRANSFORMERS` has no check list transformer, so add `lists.CHECK_LIST`
+// ahead of the bullet one to import and export check lists too.
+const MY_TRANSFORMERS = [
+  lists.CHECK_LIST,
+  ...TRANSFORMERS.map((transformer) =>
+    transformer === UNORDERED_LIST
+      ? lists.UNORDERED_LIST
+      : transformer === ORDERED_LIST
+        ? lists.ORDERED_LIST
         : transformer,
-);
+  ),
+];
 
 editor.update(() => {
   // "- a\n  - b" rather than "- a\n    - b"
