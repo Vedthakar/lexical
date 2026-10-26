@@ -447,11 +447,15 @@ const createBlockNode = (
   };
 };
 
-// Amount of spaces that define indentation level
-// TODO: should be an option
+// Default amount of spaces that define an indentation level. Can be changed
+// with `createListTransformers`.
 const LIST_INDENT_SIZE = 4;
 
-function getIndent(whitespaces: string): number {
+// CommonMark tab stop: a tab advances to the next multiple of 4 columns
+// whatever the list indent size is.
+const TAB_SIZE = 4;
+
+function getIndent(whitespaces: string, indentSize: number): number {
   const tabs = whitespaces.match(/\t/g);
   const spaces = whitespaces.match(/ /g);
 
@@ -462,7 +466,7 @@ function getIndent(whitespaces: string): number {
   }
 
   if (spaces) {
-    indent += Math.floor(spaces.length / LIST_INDENT_SIZE);
+    indent += Math.floor(spaces.length / indentSize);
   }
 
   return indent;
@@ -470,13 +474,12 @@ function getIndent(whitespaces: string): number {
 
 /**
  * The column the text after `whitespaces` starts at, expanding a tab to the
- * next multiple of `LIST_INDENT_SIZE` the way CommonMark does.
+ * next multiple of `TAB_SIZE` the way CommonMark does.
  */
 function getColumn(whitespaces: string): number {
   let column = 0;
   for (const char of whitespaces) {
-    column +=
-      char === '\t' ? LIST_INDENT_SIZE - (column % LIST_INDENT_SIZE) : 1;
+    column += char === '\t' ? TAB_SIZE - (column % TAB_SIZE) : 1;
   }
   return column;
 }
@@ -495,7 +498,7 @@ function getColumn(whitespaces: string): number {
  * nothing in the tree records it afterwards, so the columns are carried from
  * line to line for the length of one import. A shortcut typed into an editor
  * is a line on its own with no such run behind it and keeps reading its indent
- * as a fixed `LIST_INDENT_SIZE` per level, which is the step `$listExport`
+ * as a fixed indent size per level, which is the step `$listExport`
  * writes and the one the toolbar and Tab indent by.
  */
 let importListColumns: number[] | null = null;
@@ -550,12 +553,16 @@ function getColumnIndent(
  * The column this line opens its content at: where the matched marker ends,
  * with tabs expanded, so `-\ta` opens at the tab stop and not two columns in.
  * A check list item is marked by its bullet — the `[ ]` is content — so
- * `- [ ] a` opens where `- a` does. Capped one `LIST_INDENT_SIZE` past the
+ * `- [ ] a` opens where `- a` does. Capped one indent size past the
  * marker so that the indent `$listExport` writes always nests: a sublist of
- * `100. ` is exported with four spaces, short of that marker's real content
- * column.
+ * `100. ` is exported with four spaces (or `1. ` with two, at indent size 2),
+ * short of that marker's real content column.
  */
-function getContentColumn(match: string[], listType: ListType): number {
+function getContentColumn(
+  match: string[],
+  listType: ListType,
+  indentSize: number,
+): number {
   let prefix = match[0];
   if (listType === 'check') {
     const bullet = prefix.slice(match[1].length).match(/^[-*+]\s/);
@@ -563,7 +570,7 @@ function getContentColumn(match: string[], listType: ListType): number {
       prefix = match[1] + bullet[0];
     }
   }
-  return Math.min(getColumn(prefix), getColumn(match[1]) + LIST_INDENT_SIZE);
+  return Math.min(getColumn(prefix), getColumn(match[1]) + indentSize);
 }
 
 /**
@@ -575,19 +582,23 @@ function setOpenColumn(
   indent: number,
   match: string[],
   listType: ListType,
+  indentSize: number,
 ): void {
   // An indent read from `getIndent` rather than from the columns can name a
   // level no line of this import opened, so any gap below it is filled with
   // the fixed step that reading assumed.
   for (let i = columns.length; i < indent; i++) {
-    columns[i] = (i + 1) * LIST_INDENT_SIZE;
+    columns[i] = (i + 1) * indentSize;
   }
   columns.length = indent;
-  columns[indent] = getContentColumn(match, listType);
+  columns[indent] = getContentColumn(match, listType, indentSize);
 }
 
 /** @__NO_SIDE_EFFECTS__ */
-const listReplace = (listType: ListType): ElementTransformer['replace'] => {
+const listReplace = (
+  listType: ListType,
+  indentSize: number = LIST_INDENT_SIZE,
+): ElementTransformer['replace'] => {
   return (parentNode, children, match, isImport) => {
     if (
       $isHeadingNode(parentNode) ||
@@ -631,7 +642,7 @@ const listReplace = (listType: ListType): ElementTransformer['replace'] => {
     }
     const indent =
       columns === null || columns.length === 0
-        ? getIndent(match[1])
+        ? getIndent(match[1], indentSize)
         : getColumnIndent(columns, match[1]);
     if ($isListNode(nextNode) && nextNode.getListType() === listType) {
       const firstChild = nextNode.getFirstChild();
@@ -684,7 +695,7 @@ const listReplace = (listType: ListType): ElementTransformer['replace'] => {
       $setState(listNode, listMarkerState, listMarker);
     }
     if (columns !== null) {
-      setOpenColumn(columns, indent, match, listType);
+      setOpenColumn(columns, indent, match, listType, indentSize);
     }
   };
 };
@@ -738,6 +749,7 @@ const $listExport = (
   exportChildren: (node: ElementNode) => string,
   depth: number,
   selection?: BaseSelection | null,
+  indentSize: number = LIST_INDENT_SIZE,
 ): string => {
   const output = [];
   const children = listNode.getChildren();
@@ -752,6 +764,7 @@ const $listExport = (
             exportChildren,
             depth + 1,
             selection,
+            indentSize,
           );
           if (nestedResult) {
             output.push(nestedResult);
@@ -766,7 +779,7 @@ const $listExport = (
       ) {
         continue;
       }
-      const indent = ' '.repeat(depth * LIST_INDENT_SIZE);
+      const indent = ' '.repeat(depth * indentSize);
       const listType = listNode.getListType();
       const listMarker = $getState(listNode, listMarkerState);
       const prefix =
@@ -1039,44 +1052,64 @@ export const CODE: MultilineElementTransformer = {
   type: 'multiline-element',
 };
 
-export const UNORDERED_LIST: ElementTransformer = {
-  dependencies: [ListNode, ListItemNode],
-  export: (node, exportChildren, selection) => {
-    return $isListNode(node)
-      ? $listExport(node, exportChildren, 0, selection)
-      : null;
-  },
-  regExp: UNORDERED_LIST_REGEX,
-  replace: listReplace('bullet'),
-  triggerOnEnter: true,
-  type: 'element',
-};
+/** Options for {@link createListTransformers}. */
+export interface ListTransformersOptions {
+  /**
+   * Spaces per nesting level, both written on export and read on import when
+   * a line's indent is not measured against the list item above it. Defaults
+   * to 4.
+   */
+  indentSize?: number;
+}
 
-export const CHECK_LIST: ElementTransformer = {
-  dependencies: [ListNode, ListItemNode],
-  export: (node, exportChildren, selection) => {
-    return $isListNode(node)
-      ? $listExport(node, exportChildren, 0, selection)
-      : null;
-  },
-  regExp: CHECK_LIST_REGEX,
-  replace: listReplace('check'),
-  triggerOnEnter: true,
-  type: 'element',
-};
+/**
+ * Create the bullet, check and ordered list transformers with the given
+ * options, e.g. `createListTransformers({indentSize: 2})` to export nested
+ * lists with two spaces per level. Use them in place of
+ * {@link UNORDERED_LIST}, {@link CHECK_LIST} and {@link ORDERED_LIST}, which
+ * are the transformers this returns with the default options.
+ *
+ * @__NO_SIDE_EFFECTS__
+ */
+export function createListTransformers({
+  indentSize = LIST_INDENT_SIZE,
+}: ListTransformersOptions = {}): {
+  CHECK_LIST: ElementTransformer;
+  ORDERED_LIST: ElementTransformer;
+  UNORDERED_LIST: ElementTransformer;
+} {
+  const listTransformer = (
+    listType: ListType,
+    regExp: RegExp,
+  ): ElementTransformer => ({
+    dependencies: [ListNode, ListItemNode],
+    export: (node, exportChildren, selection) => {
+      return $isListNode(node)
+        ? $listExport(node, exportChildren, 0, selection, indentSize)
+        : null;
+    },
+    regExp,
+    replace: listReplace(listType, indentSize),
+    triggerOnEnter: true,
+    type: 'element',
+  });
+  return {
+    CHECK_LIST: listTransformer('check', CHECK_LIST_REGEX),
+    ORDERED_LIST: listTransformer('number', ORDERED_LIST_REGEX),
+    UNORDERED_LIST: listTransformer('bullet', UNORDERED_LIST_REGEX),
+  };
+}
 
-export const ORDERED_LIST: ElementTransformer = {
-  dependencies: [ListNode, ListItemNode],
-  export: (node, exportChildren, selection) => {
-    return $isListNode(node)
-      ? $listExport(node, exportChildren, 0, selection)
-      : null;
-  },
-  regExp: ORDERED_LIST_REGEX,
-  replace: listReplace('number'),
-  triggerOnEnter: true,
-  type: 'element',
-};
+const DEFAULT_LIST_TRANSFORMERS = createListTransformers();
+
+export const UNORDERED_LIST: ElementTransformer =
+  DEFAULT_LIST_TRANSFORMERS.UNORDERED_LIST;
+
+export const CHECK_LIST: ElementTransformer =
+  DEFAULT_LIST_TRANSFORMERS.CHECK_LIST;
+
+export const ORDERED_LIST: ElementTransformer =
+  DEFAULT_LIST_TRANSFORMERS.ORDERED_LIST;
 
 export const INLINE_CODE: TextFormatTransformer = {
   format: ['code'],

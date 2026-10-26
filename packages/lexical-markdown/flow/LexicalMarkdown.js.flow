@@ -134,6 +134,18 @@ declare export var UNORDERED_LIST: ElementTransformer;
 declare export var CHECK_LIST: ElementTransformer;
 declare export var ORDERED_LIST: ElementTransformer;
 
+export type ListTransformersOptions = {
+  indentSize?: number,
+};
+
+declare export function createListTransformers(
+  options?: ListTransformersOptions,
+): {
+  CHECK_LIST: ElementTransformer,
+  ORDERED_LIST: ElementTransformer,
+  UNORDERED_LIST: ElementTransformer,
+};
+
 declare export var LINK: TextMatchTransformer;
 
 declare export var TRANSFORMERS: Transformer[];
