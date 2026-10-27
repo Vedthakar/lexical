@@ -2302,7 +2302,40 @@ function $selectMouseDown(
 // mapping only, so if root editor is selected map will have no reference to free up memory
 const activeNestedEditorsMap: Map<string, LexicalEditor> = new Map();
 
+/**
+ * Whether `target` is an input or textarea that is not inside any editor
+ * registered against its document. A text control owns its own selection, so
+ * a `selectionchange` it fires (for example when its value is set while it is
+ * unfocused) bubbles to the document without the document's selection having
+ * moved. See #9471.
+ */
+function isTextControlOutsideEditors(target: EventTarget | null): boolean {
+  if (
+    !isHTMLElement(target) ||
+    (target.nodeName !== 'INPUT' && target.nodeName !== 'TEXTAREA')
+  ) {
+    return false;
+  }
+  const ownerDocument = getDOMOwnerDocument(target);
+  const registration =
+    ownerDocument !== null
+      ? documentRegistrations.get(ownerDocument)
+      : undefined;
+  if (registration !== undefined) {
+    for (const editor of registration.editors) {
+      const rootElement = editor._rootElement;
+      if (rootElement !== null && rootElement.contains(target)) {
+        return false;
+      }
+    }
+  }
+  return true;
+}
+
 function onDocumentSelectionChange(event: Event): void {
+  if (isTextControlOutsideEditors(event.target)) {
+    return;
+  }
   const domSelection = getDOMSelectionFromTarget(event.target);
   if (domSelection === null) {
     return;
