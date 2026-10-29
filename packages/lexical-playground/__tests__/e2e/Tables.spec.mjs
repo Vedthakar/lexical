@@ -29,6 +29,7 @@ import {
   assertTableSelectionCoordinates,
   click,
   clickSelectors,
+  clickTableCellActiveButton,
   copyToClipboard,
   deleteTableColumns,
   deleteTableRows,
@@ -1382,6 +1383,42 @@ test.describe('Tables', () => {
         `,
       );
     });
+  });
+
+  test('Table action menu opens next to its button when the page is scrolled horizontally', async ({
+    page,
+    isCollab,
+  }) => {
+    test.skip(isCollab);
+    await initialize({isCollab, page});
+    await focusEditor(page);
+    await insertTable(page, 2, 2);
+    // Make the page wider than the viewport and scroll it horizontally.
+    await page.evaluate(() => {
+      const spacer = document.createElement('div');
+      spacer.style.width = '3000px';
+      spacer.style.height = '1px';
+      document.body.appendChild(spacer);
+      window.scrollTo(150, window.scrollY);
+    });
+    expect(await page.evaluate(() => window.scrollX)).toBeGreaterThan(0);
+    await clickTableCellActiveButton(page);
+    const dropdown = page.locator('.dropdown').filter({
+      has: page.locator('[data-test-id="table-insert-row-above"]'),
+    });
+    await expect(dropdown).toBeVisible();
+    const buttonBox = await page
+      .locator(
+        '.table-cell-action-button-container--active > .table-cell-action-button',
+      )
+      .boundingBox();
+    const dropdownBox = await dropdown.boundingBox();
+    // Opens 5px to the right of the button (or flips to its left).
+    const opensRight =
+      Math.abs(dropdownBox.x - (buttonBox.x + buttonBox.width + 5)) <= 2;
+    const opensLeft =
+      Math.abs(dropdownBox.x + dropdownBox.width + 5 - buttonBox.x) <= 2;
+    expect(opensRight || opensLeft).toBe(true);
   });
 
   test(`Horizontal rule inside cell`, async ({page, isCollab}) => {
