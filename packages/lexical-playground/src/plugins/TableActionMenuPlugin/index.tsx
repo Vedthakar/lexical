@@ -220,9 +220,10 @@ function TableActionMenu({
       ) {
         const position =
           menuButtonRect.left - dropDownElementRect.width - margin;
-        leftPosition = (position < 0 ? margin : position) + window.pageXOffset;
+        leftPosition = position < 0 ? margin : position;
       }
-      dropDownElement.style.left = `${leftPosition + window.pageXOffset}px`;
+      // The dropdown is position: fixed, so use viewport coordinates only.
+      dropDownElement.style.left = `${leftPosition}px`;
 
       let topPosition = menuButtonRect.top;
       if (topPosition + dropDownElementRect.height > window.innerHeight) {
