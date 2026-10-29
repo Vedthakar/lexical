@@ -1028,6 +1028,106 @@ function restoreDOMSelection(
   }
 }
 
+/**
+ * When a vertical caret move would land directly after an inline decorator
+ * (e.g. an inline image at the start of a line), browsers place the caret
+ * after it even if the caret's horizontal position is closer to the
+ * decorator's start (its left edge in LTR, its right edge in RTL). Probe the
+ * browser's line move and, in that case, put the selection before the
+ * decorator (or before the first of a run of adjacent inline decorators).
+ */
+function $tryInlineDecoratorLineNavigation(
+  selection: RangeSelection,
+  isBackward: boolean,
+): boolean {
+  if (!selection.isCollapsed()) {
+    return false;
+  }
+  const focusNode = selection.focus.getNode();
+  const parentBlock = $findMatchingParent(
+    $isElementNode(focusNode) ? focusNode : focusNode.getParentOrThrow(),
+    (n): n is ElementNode => $isElementNode(n) && !n.isInline(),
+  );
+  if (parentBlock === null) {
+    return false;
+  }
+  const siblingBlock = $getSiblingCaret(
+    parentBlock,
+    isBackward ? 'previous' : 'next',
+  ).getNodeAtCaret();
+  const hasInlineDecorator = (block: LexicalNode | null) =>
+    $isElementNode(block) &&
+    block.getChildren().some(n => $isDecoratorNode(n) && n.isInline());
+  if (!hasInlineDecorator(parentBlock) && !hasInlineDecorator(siblingBlock)) {
+    return false;
+  }
+  const editor = $getEditor();
+  const rootElement = editor.getRootElement();
+  if (rootElement === null) {
+    return false;
+  }
+  const domSelection = getDOMSelection(rootElement.ownerDocument.defaultView);
+  if (domSelection === null || domSelection.rangeCount === 0) {
+    return false;
+  }
+  const curRange = domSelection.getRangeAt(0).cloneRange();
+  curRange.collapse(true);
+  const curRect = curRange.getBoundingClientRect();
+  if (curRect.height === 0) {
+    return false;
+  }
+  const savedAnchorNode = domSelection.anchorNode;
+  const savedAnchorOffset = domSelection.anchorOffset;
+  const savedFocusNode = domSelection.focusNode;
+  const savedFocusOffset = domSelection.focusOffset;
+  domSelection.modify('move', isBackward ? 'backward' : 'forward', 'line');
+  const newNode = domSelection.anchorNode;
+  const newOffset = domSelection.anchorOffset;
+  restoreDOMSelection(
+    domSelection,
+    savedAnchorNode,
+    savedAnchorOffset,
+    savedFocusNode,
+    savedFocusOffset,
+  );
+  if (newNode === null) {
+    return false;
+  }
+  let before: LexicalNode | null = null;
+  if (newNode.nodeType === 3) {
+    const textNode = $getNearestNodeFromDOMNode(newNode);
+    if (newOffset === 0 && $isTextNode(textNode)) {
+      before = textNode.getPreviousSibling();
+    }
+  } else if (newOffset > 0) {
+    before = $getNearestNodeFromDOMNode(newNode.childNodes[newOffset - 1]);
+  }
+  const win = rootElement.ownerDocument.defaultView;
+  // Walk back over a run of inline decorators ([a][b]text) and stop at the
+  // first one whose start half the caret is not on. In RTL the start side
+  // of a decorator is its right edge.
+  let target: LexicalNode | null = null;
+  while ($isDecoratorNode(before) && before.isInline()) {
+    const decoratorDOM = editor.getElementByKey(before.getKey());
+    if (decoratorDOM === null || win === null) {
+      break;
+    }
+    const rect = decoratorDOM.getBoundingClientRect();
+    const center = rect.left + rect.width / 2;
+    const isRTL = win.getComputedStyle(decoratorDOM).direction === 'rtl';
+    if (isRTL ? curRect.left <= center : curRect.left >= center) {
+      break;
+    }
+    target = before;
+    before = before.getPreviousSibling();
+  }
+  if (target === null) {
+    return false;
+  }
+  target.selectPrevious();
+  return true;
+}
+
 function $tryInlineGridLineNavigation(
   selection: RangeSelection,
   isBackward: boolean,
@@ -1558,6 +1658,13 @@ export function registerRichText(
             event.preventDefault();
             return true;
           }
+          if (
+            !event.shiftKey &&
+            $tryInlineDecoratorLineNavigation(selection, true)
+          ) {
+            event.preventDefault();
+            return true;
+          }
         }
         return false;
       },
@@ -1607,6 +1714,13 @@ export function registerRichText(
           if (
             !event.shiftKey &&
             $tryInlineGridLineNavigation(selection, false)
+          ) {
+            event.preventDefault();
+            return true;
+          }
+          if (
+            !event.shiftKey &&
+            $tryInlineDecoratorLineNavigation(selection, false)
           ) {
             event.preventDefault();
             return true;
