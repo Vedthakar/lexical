@@ -78,6 +78,63 @@ test.describe('Images', () => {
       });
     });
 
+    test('Up and down arrows land before an inline image at the start of an RTL line', async ({
+      page,
+      isCollab,
+    }) => {
+      test.skip(isCollab);
+      await focusEditor(page);
+      await page.keyboard.type('שלום');
+      await page.keyboard.press('Enter');
+      await insertSampleImage(page);
+      await waitForSelector(page, '.editor-image img');
+      await page.keyboard.type('עולם');
+      await page.keyboard.press('Enter');
+      await page.keyboard.type('להתראות');
+
+      await moveToEditorBeginning(page);
+      await page.keyboard.press('ArrowDown');
+      await assertSelection(page, {
+        anchorOffset: 0,
+        anchorPath: [1],
+        focusOffset: 0,
+        focusPath: [1],
+      });
+
+      await moveToEditorEnd(page);
+      await moveToLineBeginning(page);
+      await page.keyboard.press('ArrowUp');
+      await assertSelection(page, {
+        anchorOffset: 0,
+        anchorPath: [1],
+        focusOffset: 0,
+        focusPath: [1],
+      });
+    });
+
+    test('Down arrow lands before a run of inline images at the start of a line', async ({
+      page,
+      isCollab,
+    }) => {
+      test.skip(isCollab);
+      await focusEditor(page);
+      await page.keyboard.type('hello');
+      await page.keyboard.press('Enter');
+      await insertSampleImage(page);
+      await insertSampleImage(page);
+      await waitForSelector(page, '.editor-image img');
+      await page.keyboard.type('world');
+
+      await moveToEditorBeginning(page);
+      await page.keyboard.press('ArrowDown');
+      await assertSelection(page, {
+        anchorOffset: 0,
+        anchorPath: [1],
+        focusOffset: 0,
+        focusPath: [1],
+      });
+    });
+
     test(`Can create a decorator and move selection around it`, async ({
       page,
       isCollab,
