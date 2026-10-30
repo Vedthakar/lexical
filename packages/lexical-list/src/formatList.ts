@@ -216,17 +216,21 @@ export function $insertList(listType: ListType): void {
 /**
  * With node structure enforced, returns the keys of the top-level (child of a
  * root or shadow root) elements that contain a selected text block nested in
- * another block container, so that converting the top-level element would
+ * another block container (or a selected empty block nested that way), so
+ * that converting the top-level element would
  * move a block container into a list item.
  */
 function $getTopsNeedingInPlaceLists(nodes: LexicalNode[]): Set<NodeKey> {
   const tops = new Set<NodeKey>();
   for (const node of nodes) {
-    if (!$isLeafNode(node)) {
-      continue;
-    }
+    // A selected empty block is converted itself, so count it as the text
+    // block (#9570).
+    let parent: ElementNode | null = $isLeafNode(node)
+      ? node.getParent()
+      : $isElementNode(node) && node.isEmpty() && !$isListItemNode(node)
+        ? node
+        : null;
     let blocks = 0;
-    let parent = node.getParent();
     while (parent !== null && !$isListNode(parent)) {
       if (!parent.isInline()) {
         blocks++;

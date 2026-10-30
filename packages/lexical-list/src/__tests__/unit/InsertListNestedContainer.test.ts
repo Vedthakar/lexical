@@ -138,4 +138,23 @@ describe('$insertList on a paragraph inside a block container (#9570)', () => {
       }),
     ).toBe('test_box(test_box(list(listitem("one"))) list(listitem("two")))');
   });
+
+  test('with NodeStructureExtension, a selection from an empty p1 over box(box(p1), p2) keeps both boxes', () => {
+    expect(
+      runInsertList(true, () => {
+        const p1 = $createParagraphNode();
+        const t2 = $createTextNode('two');
+        $getRoot()
+          .clear()
+          .append(
+            $create(BoxNode).append(
+              $create(BoxNode).append(p1),
+              $createParagraphNode().append(t2),
+            ),
+          );
+        const selection = p1.select(0, 0);
+        selection.focus.set(t2.getKey(), 3, 'text');
+      }),
+    ).toBe('test_box(test_box(list(listitem())) list(listitem("two")))');
+  });
 });
