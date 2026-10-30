@@ -317,6 +317,7 @@ export function LexicalMenu<TOption extends MenuOption>({
   shouldSplitNodeWithQuery = false,
   commandPriority = COMMAND_PRIORITY_LOW,
   preselectFirstItem = true,
+  initialHighlightedIndex = 0,
 }: {
   close: () => void;
   editor: LexicalEditor;
@@ -333,6 +334,7 @@ export function LexicalMenu<TOption extends MenuOption>({
   ) => void;
   commandPriority?: CommandListenerPriority;
   preselectFirstItem?: boolean;
+  initialHighlightedIndex?: number;
 }): JSX.Element | null {
   const [rawSelectedIndex, setHighlightedIndex] = useState<null | number>(null);
   // Clamp highlighted index if options list shrinks
@@ -342,12 +344,20 @@ export function LexicalMenu<TOption extends MenuOption>({
       : null;
 
   const matchingString = resolution.match && resolution.match.matchingString;
+  // The index to highlight when the menu opens or the query changes, kept
+  // inside the options.
+  const initialIndex = Math.max(
+    0,
+    Math.min(options.length - 1, initialHighlightedIndex),
+  );
 
   useEffect(() => {
     if (preselectFirstItem) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
-      setHighlightedIndex(0);
+      setHighlightedIndex(initialIndex);
     }
+    // Only reset the highlight when the query changes, not when options do.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [matchingString, preselectFirstItem]);
 
   const selectOptionAndCleanUp = useCallback(
@@ -429,9 +439,15 @@ export function LexicalMenu<TOption extends MenuOption>({
     if (options === null) {
       setHighlightedIndex(null);
     } else if (selectedIndex === null && preselectFirstItem) {
-      updateSelectedIndex(0);
+      updateSelectedIndex(initialIndex);
     }
-  }, [options, selectedIndex, updateSelectedIndex, preselectFirstItem]);
+  }, [
+    options,
+    selectedIndex,
+    updateSelectedIndex,
+    preselectFirstItem,
+    initialIndex,
+  ]);
 
   // Whether this menu currently puts nothing on screen, and so must not
   // consume the keys that would otherwise reach the editor. Only true for the
