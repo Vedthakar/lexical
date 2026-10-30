@@ -14,6 +14,7 @@ import {
   $copyNode,
   $createParagraphNode,
   $getChildCaretAtIndex,
+  $getEditor,
   $getSelection,
   $getSlotHost,
   $isElementNode,
@@ -24,6 +25,7 @@ import {
   $normalizeCaret,
   $setPointFromCaret,
   ElementNode,
+  INTERNAL_isNodeStructureEnforced,
   type LexicalNode,
   type NodeKey,
   type ParagraphNode,
@@ -129,6 +131,9 @@ export function $insertList(listType: ListType): void {
     }
 
     const handled = new Set();
+    const inPlaceTops = INTERNAL_isNodeStructureEnforced($getEditor())
+      ? $getTopsNeedingInPlaceLists(nodes)
+      : null;
     for (let i = 0; i < nodes.length; i++) {
       const node = nodes[i];
 
@@ -152,6 +157,8 @@ export function $insertList(listType: ListType): void {
           ? node
           : null;
 
+      // The first block above the selected node.
+      let textBlock: ElementNode | null = null;
       while (parent != null) {
         const parentKey = parent.getKey();
 
@@ -168,7 +175,30 @@ export function $insertList(listType: ListType): void {
 
           break;
         } else {
+          if (textBlock === null && !parent.isInline()) {
+            textBlock = parent;
+          }
           const nextParent = parent.getParent();
+
+          if (
+            $isRootOrShadowRoot(nextParent) &&
+            textBlock !== null &&
+            textBlock !== parent &&
+            inPlaceTops !== null &&
+            inPlaceTops.has(parentKey)
+          ) {
+            // Converting `parent` would move a block container into the new
+            // list item, and the node structure normalization lifts it out
+            // again, leaving no list and losing `parent`. Convert the block
+            // holding the text in place instead, for every selected block
+            // under this top-level container (#9570).
+            const textBlockKey = textBlock.getKey();
+            if (!handled.has(textBlockKey)) {
+              handled.add(textBlockKey);
+              $createListOrMerge(textBlock, listType);
+            }
+            break;
+          }
 
           if ($isRootOrShadowRoot(nextParent) && !handled.has(parentKey)) {
             handled.add(parentKey);
@@ -181,6 +211,37 @@ export function $insertList(listType: ListType): void {
       }
     }
   }
+}
+
+/**
+ * With node structure enforced, returns the keys of the top-level (child of a
+ * root or shadow root) elements that contain a selected text block nested in
+ * another block container, so that converting the top-level element would
+ * move a block container into a list item.
+ */
+function $getTopsNeedingInPlaceLists(nodes: LexicalNode[]): Set<NodeKey> {
+  const tops = new Set<NodeKey>();
+  for (const node of nodes) {
+    if (!$isLeafNode(node)) {
+      continue;
+    }
+    let blocks = 0;
+    let parent = node.getParent();
+    while (parent !== null && !$isListNode(parent)) {
+      if (!parent.isInline()) {
+        blocks++;
+      }
+      const nextParent: ElementNode | null = parent.getParent();
+      if ($isRootOrShadowRoot(nextParent)) {
+        if (blocks > 2) {
+          tops.add(parent.getKey());
+        }
+        break;
+      }
+      parent = nextParent;
+    }
+  }
+  return tops;
 }
 
 function append(node: ElementNode, nodesToAppend: LexicalNode[]) {
