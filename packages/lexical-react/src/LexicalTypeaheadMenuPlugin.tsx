@@ -139,6 +139,13 @@ export type TypeaheadMenuPluginProps<TOption extends MenuOption> = {
   commandPriority?: CommandListenerPriority;
   parent?: HTMLElement;
   preselectFirstItem?: boolean;
+  /**
+   * The index of the option to highlight when the menu opens and whenever the
+   * query changes (clamped to the options). Defaults to 0, the first option.
+   * The arrow keys move from this option. Ignored when `preselectFirstItem`
+   * is false.
+   */
+  initialHighlightedIndex?: number;
   ignoreEntityBoundary?: boolean;
 };
 
@@ -163,6 +170,7 @@ export function LexicalTypeaheadMenuPlugin<TOption extends MenuOption>({
   commandPriority = COMMAND_PRIORITY_LOW,
   parent,
   preselectFirstItem = true,
+  initialHighlightedIndex = 0,
   ignoreEntityBoundary = false,
 }: TypeaheadMenuPluginProps<TOption>): JSX.Element | null {
   const [editor] = useLexicalComposerContext();
@@ -326,6 +334,7 @@ export function LexicalTypeaheadMenuPlugin<TOption extends MenuOption>({
       onSelectOption={onSelectOption}
       commandPriority={commandPriority}
       preselectFirstItem={preselectFirstItem}
+      initialHighlightedIndex={initialHighlightedIndex}
     />
   );
 }

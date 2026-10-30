@@ -8,7 +8,12 @@
 
 import * as ComposerContext from '@lexical/react/LexicalComposerContext';
 import {type LexicalComposerContextWithEditor} from '@lexical/react/LexicalComposerContext';
-import {KEY_ENTER_COMMAND, type LexicalEditor} from 'lexical';
+import {
+  KEY_ARROW_DOWN_COMMAND,
+  KEY_ARROW_UP_COMMAND,
+  KEY_ENTER_COMMAND,
+  type LexicalEditor,
+} from 'lexical';
 import {createTestEditor} from 'lexical/src/__tests__/utils';
 import * as React from 'react';
 import {act} from 'react';
@@ -479,6 +484,69 @@ describe('LexicalMenu', () => {
 
       // When resolution.match is undefined, matchingString should be ''
       expect(capturedMatchingString).toBe('');
+    });
+  });
+  describe('initialHighlightedIndex', () => {
+    async function renderMenu(
+      options: TestOption[],
+      initialHighlightedIndex?: number,
+    ): Promise<() => number | null> {
+      let selectedIndex: number | null = null;
+      const menuRenderFn: MenuRenderFn<TestOption> = (_ref, itemProps) => {
+        selectedIndex = itemProps.selectedIndex;
+        return null;
+      };
+      await act(async () => {
+        reactRoot.render(
+          <LexicalMenu<TestOption>
+            close={vi.fn()}
+            editor={editor}
+            anchorElementRef={{current: anchorElement}}
+            resolution={createTestResolution('test')}
+            options={options}
+            menuRenderFn={menuRenderFn}
+            onSelectOption={vi.fn()}
+            initialHighlightedIndex={initialHighlightedIndex}
+          />,
+        );
+      });
+      return () => selectedIndex;
+    }
+
+    const threeOptions = () => [
+      new TestOption('A'),
+      new TestOption('B'),
+      new TestOption('C'),
+    ];
+
+    async function press(
+      command: typeof KEY_ARROW_DOWN_COMMAND | typeof KEY_ARROW_UP_COMMAND,
+    ) {
+      await act(async () => {
+        editor.dispatchCommand(command, new KeyboardEvent('keydown'));
+      });
+    }
+
+    it('highlights the first option by default', async () => {
+      const getIndex = await renderMenu(threeOptions());
+      expect(getIndex()).toBe(0);
+      await press(KEY_ARROW_DOWN_COMMAND);
+      expect(getIndex()).toBe(1);
+    });
+
+    it('highlights the given option and the arrow keys move from it', async () => {
+      const getIndex = await renderMenu(threeOptions(), 2);
+      expect(getIndex()).toBe(2);
+      await press(KEY_ARROW_UP_COMMAND);
+      expect(getIndex()).toBe(1);
+      await press(KEY_ARROW_DOWN_COMMAND);
+      await press(KEY_ARROW_DOWN_COMMAND);
+      expect(getIndex()).toBe(0);
+    });
+
+    it('clamps an index past the last option', async () => {
+      const getIndex = await renderMenu(threeOptions(), 10);
+      expect(getIndex()).toBe(2);
     });
   });
 });
