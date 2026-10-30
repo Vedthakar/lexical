@@ -14,6 +14,7 @@ import {
   $copyNode,
   $createParagraphNode,
   $getChildCaretAtIndex,
+  $getEditor,
   $getSelection,
   $getSlotHost,
   $isElementNode,
@@ -24,6 +25,7 @@ import {
   $normalizeCaret,
   $setPointFromCaret,
   ElementNode,
+  INTERNAL_isNodeStructureEnforced,
   type LexicalNode,
   type NodeKey,
   type ParagraphNode,
@@ -152,6 +154,10 @@ export function $insertList(listType: ListType): void {
           ? node
           : null;
 
+      // The first block above the selected node, and the ancestor on the
+      // walk just below `parent`.
+      let textBlock: ElementNode | null = null;
+      let child: ElementNode | null = null;
       while (parent != null) {
         const parentKey = parent.getKey();
 
@@ -168,7 +174,29 @@ export function $insertList(listType: ListType): void {
 
           break;
         } else {
+          if (textBlock === null && !parent.isInline()) {
+            textBlock = parent;
+          }
           const nextParent = parent.getParent();
+
+          if (
+            $isRootOrShadowRoot(nextParent) &&
+            textBlock !== null &&
+            child !== null &&
+            child !== textBlock &&
+            INTERNAL_isNodeStructureEnforced($getEditor())
+          ) {
+            // Converting `parent` would move a block container (`child`)
+            // into the new list item, and the node structure normalization
+            // lifts it out again, leaving no list and losing `parent`.
+            // Convert the block holding the text in place instead (#9570).
+            const textBlockKey = textBlock.getKey();
+            if (!handled.has(textBlockKey)) {
+              handled.add(textBlockKey);
+              $createListOrMerge(textBlock, listType);
+            }
+            break;
+          }
 
           if ($isRootOrShadowRoot(nextParent) && !handled.has(parentKey)) {
             handled.add(parentKey);
@@ -176,6 +204,7 @@ export function $insertList(listType: ListType): void {
             break;
           }
 
+          child = parent;
           parent = nextParent;
         }
       }
