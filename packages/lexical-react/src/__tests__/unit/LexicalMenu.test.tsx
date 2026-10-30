@@ -9,6 +9,7 @@
 import * as ComposerContext from '@lexical/react/LexicalComposerContext';
 import {type LexicalComposerContextWithEditor} from '@lexical/react/LexicalComposerContext';
 import {
+  COMMAND_PRIORITY_CRITICAL,
   KEY_ARROW_DOWN_COMMAND,
   KEY_ARROW_UP_COMMAND,
   KEY_ENTER_COMMAND,
@@ -34,6 +35,7 @@ import {
   MenuOption,
   type MenuRenderFn,
   type MenuResolution,
+  SCROLL_TYPEAHEAD_OPTION_INTO_VIEW_COMMAND,
   useDynamicPositioning,
 } from '../../shared/LexicalMenu';
 
@@ -487,15 +489,15 @@ describe('LexicalMenu', () => {
     });
   });
   describe('initialHighlightedIndex', () => {
+    let selectedIndex: number | null = null;
+    const menuRenderFn: MenuRenderFn<TestOption> = (_ref, itemProps) => {
+      selectedIndex = itemProps.selectedIndex;
+      return null;
+    };
     async function renderMenu(
       options: TestOption[],
       initialHighlightedIndex?: number,
     ): Promise<() => number | null> {
-      let selectedIndex: number | null = null;
-      const menuRenderFn: MenuRenderFn<TestOption> = (_ref, itemProps) => {
-        selectedIndex = itemProps.selectedIndex;
-        return null;
-      };
       await act(async () => {
         reactRoot.render(
           <LexicalMenu<TestOption>
@@ -542,6 +544,53 @@ describe('LexicalMenu', () => {
       await press(KEY_ARROW_DOWN_COMMAND);
       await press(KEY_ARROW_DOWN_COMMAND);
       expect(getIndex()).toBe(0);
+    });
+
+    it('counts a negative index from the end', async () => {
+      const getIndex = await renderMenu(threeOptions(), -1);
+      expect(getIndex()).toBe(2);
+      await renderMenu(threeOptions(), -2);
+      expect(getIndex()).toBe(1);
+      await renderMenu(threeOptions(), -10);
+      expect(getIndex()).toBe(0);
+    });
+
+    it('re-applies the index as the options change until the user moves the highlight', async () => {
+      const getIndex = await renderMenu([], -1);
+      // Late results.
+      await renderMenu(threeOptions(), -1);
+      expect(getIndex()).toBe(2);
+      // A growing list.
+      await renderMenu([...threeOptions(), new TestOption('D')], -1);
+      expect(getIndex()).toBe(3);
+      await press(KEY_ARROW_UP_COMMAND);
+      expect(getIndex()).toBe(2);
+      // After a manual move, more options keep the user's highlight.
+      await renderMenu(
+        [...threeOptions(), new TestOption('D'), new TestOption('E')],
+        -1,
+      );
+      expect(getIndex()).toBe(2);
+    });
+
+    it('scrolls the initial highlight into view', async () => {
+      const options = threeOptions();
+      options.forEach(option =>
+        option.setRefElement(document.createElement('li')),
+      );
+      const scrolled: number[] = [];
+      onTestFinished(
+        editor.registerCommand(
+          SCROLL_TYPEAHEAD_OPTION_INTO_VIEW_COMMAND,
+          ({index}) => {
+            scrolled.push(index);
+            return true;
+          },
+          COMMAND_PRIORITY_CRITICAL,
+        ),
+      );
+      await renderMenu(options, 2);
+      expect(scrolled).toEqual([2]);
     });
 
     it('clamps an index past the last option', async () => {

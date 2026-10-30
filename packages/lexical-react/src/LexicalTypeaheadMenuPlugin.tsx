@@ -141,9 +141,12 @@ export type TypeaheadMenuPluginProps<TOption extends MenuOption> = {
   preselectFirstItem?: boolean;
   /**
    * The index of the option to highlight when the menu opens and whenever the
-   * query changes (clamped to the options). Defaults to 0, the first option.
-   * The arrow keys move from this option. Ignored when `preselectFirstItem`
-   * is false.
+   * query changes. A negative index counts from the end (-1 is the last
+   * option), and the result is clamped to the options. It is re-applied as
+   * the options change (late results, a growing list) until the user moves
+   * the highlight, and is scrolled into view like arrow-key navigation.
+   * Defaults to 0, the first option. The arrow keys move from this option.
+   * Ignored when `preselectFirstItem` is false.
    */
   initialHighlightedIndex?: number;
   ignoreEntityBoundary?: boolean;

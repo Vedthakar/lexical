@@ -337,6 +337,14 @@ export function LexicalMenu<TOption extends MenuOption>({
   initialHighlightedIndex?: number;
 }): JSX.Element | null {
   const [rawSelectedIndex, setHighlightedIndex] = useState<null | number>(null);
+  // Whether the user has moved the highlight (arrow keys, mouse, or a custom
+  // renderer's setHighlightedIndex) since the query last changed. Until then
+  // the initial index is re-applied as the options change.
+  const userHighlightedRef = useRef(false);
+  const setHighlightedIndexByUser = useCallback((index: number) => {
+    userHighlightedRef.current = true;
+    setHighlightedIndex(index);
+  }, []);
   // Clamp highlighted index if options list shrinks
   const selectedIndex =
     rawSelectedIndex !== null
@@ -345,13 +353,19 @@ export function LexicalMenu<TOption extends MenuOption>({
 
   const matchingString = resolution.match && resolution.match.matchingString;
   // The index to highlight when the menu opens or the query changes, kept
-  // inside the options.
+  // inside the options. A negative index counts from the end (-1 is last).
   const initialIndex = Math.max(
     0,
-    Math.min(options.length - 1, initialHighlightedIndex),
+    Math.min(
+      options.length - 1,
+      initialHighlightedIndex < 0
+        ? options.length + initialHighlightedIndex
+        : initialHighlightedIndex,
+    ),
   );
 
   useEffect(() => {
+    userHighlightedRef.current = false;
     if (preselectFirstItem) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setHighlightedIndex(initialIndex);
@@ -403,11 +417,11 @@ export function LexicalMenu<TOption extends MenuOption>({
                   index={i}
                   isSelected={selectedIndex === i}
                   onClick={() => {
-                    setHighlightedIndex(i);
+                    setHighlightedIndexByUser(i);
                     selectOptionAndCleanUp(option);
                   }}
                   onMouseEnter={() => {
-                    setHighlightedIndex(i);
+                    setHighlightedIndexByUser(i);
                   }}
                   key={option.key}
                   option={option}
@@ -423,7 +437,7 @@ export function LexicalMenu<TOption extends MenuOption>({
     options,
     selectedIndex,
     selectOptionAndCleanUp,
-    setHighlightedIndex,
+    setHighlightedIndexByUser,
   ]);
 
   useEffect(() => {
@@ -438,7 +452,13 @@ export function LexicalMenu<TOption extends MenuOption>({
   useLayoutEffect(() => {
     if (options === null) {
       setHighlightedIndex(null);
-    } else if (selectedIndex === null && preselectFirstItem) {
+    } else if (
+      preselectFirstItem &&
+      (selectedIndex === null ||
+        (!userHighlightedRef.current && selectedIndex !== initialIndex))
+    ) {
+      // Also re-applied when the options change (late results, a growing
+      // list) until the user moves the highlight.
       updateSelectedIndex(initialIndex);
     }
   }, [
@@ -448,6 +468,25 @@ export function LexicalMenu<TOption extends MenuOption>({
     preselectFirstItem,
     initialIndex,
   ]);
+
+  // Scroll a non-default initial highlight into view, as the arrow keys do.
+  useLayoutEffect(() => {
+    if (
+      !preselectFirstItem ||
+      userHighlightedRef.current ||
+      initialIndex === 0 ||
+      selectedIndex !== initialIndex
+    ) {
+      return;
+    }
+    const option = options[initialIndex];
+    if (option && option.ref && option.ref.current) {
+      editor.dispatchCommand(SCROLL_TYPEAHEAD_OPTION_INTO_VIEW_COMMAND, {
+        index: initialIndex,
+        option,
+      });
+    }
+  }, [editor, options, initialIndex, selectedIndex, preselectFirstItem]);
 
   // Whether this menu currently puts nothing on screen, and so must not
   // consume the keys that would otherwise reach the editor. Only true for the
@@ -493,6 +532,7 @@ export function LexicalMenu<TOption extends MenuOption>({
                 ? selectedIndex + 1
                 : 0;
 
+          userHighlightedRef.current = true;
           updateSelectedIndex(newSelectedIndex);
 
           const option = options[newSelectedIndex];
@@ -530,6 +570,7 @@ export function LexicalMenu<TOption extends MenuOption>({
                 ? selectedIndex - 1
                 : options.length - 1;
 
+          userHighlightedRef.current = true;
           updateSelectedIndex(newSelectedIndex);
 
           const option = options[newSelectedIndex];
@@ -622,9 +663,9 @@ export function LexicalMenu<TOption extends MenuOption>({
       options,
       selectOptionAndCleanUp,
       selectedIndex,
-      setHighlightedIndex,
+      setHighlightedIndex: setHighlightedIndexByUser,
     }),
-    [selectOptionAndCleanUp, selectedIndex, options],
+    [selectOptionAndCleanUp, selectedIndex, options, setHighlightedIndexByUser],
   );
 
   if (menuRenderFnProp != null) {
