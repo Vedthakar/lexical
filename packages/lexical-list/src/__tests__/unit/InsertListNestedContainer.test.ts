@@ -45,6 +45,16 @@ function insertListIn(
   structure: boolean,
   wrap: (paragraph: ElementNode) => ElementNode,
 ): string {
+  return runInsertList(structure, () => {
+    const text = $createTextNode('abc');
+    $getRoot()
+      .clear()
+      .append(wrap($createParagraphNode().append(text)));
+    text.select(1, 1);
+  });
+}
+
+function runInsertList(structure: boolean, $setup: () => void): string {
   const editor = buildEditorFromExtensions(
     defineExtension({
       dependencies: [
@@ -61,11 +71,7 @@ function insertListIn(
   );
   editor.update(
     () => {
-      const text = $createTextNode('abc');
-      $getRoot()
-        .clear()
-        .append(wrap($createParagraphNode().append(text)));
-      text.select(1, 1);
+      $setup();
       $insertList('bullet');
     },
     {discrete: true},
@@ -102,5 +108,34 @@ describe('$insertList on a paragraph inside a block container (#9570)', () => {
   test('a paragraph at the root still becomes a list', () => {
     expect(insertListIn(true, p => p)).toBe('list(listitem("abc"))');
     expect(insertListIn(false, p => p)).toBe('list(listitem("abc"))');
+  });
+
+  test('with NodeStructureExtension, three nested boxes are kept', () => {
+    expect(
+      insertListIn(true, p =>
+        $create(BoxNode).append(
+          $create(BoxNode).append($create(BoxNode).append(p)),
+        ),
+      ),
+    ).toBe('test_box(test_box(test_box(list(listitem("abc")))))');
+  });
+
+  test('with NodeStructureExtension, a selection over box(box(p1), p2) keeps both boxes', () => {
+    expect(
+      runInsertList(true, () => {
+        const t1 = $createTextNode('one');
+        const t2 = $createTextNode('two');
+        $getRoot()
+          .clear()
+          .append(
+            $create(BoxNode).append(
+              $create(BoxNode).append($createParagraphNode().append(t1)),
+              $createParagraphNode().append(t2),
+            ),
+          );
+        const selection = t1.select(0, 0);
+        selection.focus.set(t2.getKey(), 3, 'text');
+      }),
+    ).toBe('test_box(test_box(list(listitem("one"))) list(listitem("two")))');
   });
 });
