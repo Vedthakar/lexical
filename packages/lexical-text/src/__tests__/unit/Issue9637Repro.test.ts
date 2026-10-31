@@ -68,8 +68,13 @@ function typeInto(
       $getRoot().append(
         $createParagraphNode().append(
           ...texts.map(t => {
-            const node = $createTextNode(t.replace(/^\*/, ''));
-            return t.startsWith('*') ? node.toggleFormat('bold') : node;
+            // "*" marks a bold node, "!" a token-mode node.
+            const node = $createTextNode(t.replace(/^[*!]/, ''));
+            return t.startsWith('*')
+              ? node.toggleFormat('bold')
+              : t.startsWith('!')
+                ? node.setMode('token')
+                : node;
           }),
         ),
       );
@@ -117,6 +122,13 @@ describe('#9637 text entity transforms between two formatted neighbours', () => 
     // entity, the same as on main (the loop needs a neighbour on both sides).
     expect(typeInto(['*x', 'dogcat'], 1, 3, ' ')).toBe(
       'text*:"x" text:"dog " test-keyword:"cat"',
+    );
+  });
+  test('token "x" | "dogcat", type a space after "dog"', () => {
+    // A token-mode previous node is not simple text, so the skip does not
+    // apply: as on main, "dog" becomes a keyword next to it.
+    expect(typeInto(['!x', 'dogcat'], 1, 3, ' ')).toBe(
+      'text:"x" test-keyword:"dog" text:" " test-keyword:"cat"',
     );
   });
   // Controls: these settle on main.
