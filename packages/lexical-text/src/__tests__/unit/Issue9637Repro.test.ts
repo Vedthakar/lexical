@@ -100,6 +100,7 @@ function typeInto(
   );
 }
 
+// Cases from @zurfyx's report in #9637.
 describe('#9637 text entity transforms between two formatted neighbours', () => {
   test('bold "x" | "dogcat" | bold "y", type a space after "dog"', () => {
     expect(typeInto(['*x', 'dogcat', '*y'], 1, 3, ' ')).toBe(
@@ -109,6 +110,13 @@ describe('#9637 text entity transforms between two formatted neighbours', () => 
   test('bold "x" | "dogcat" | bold "dog", type an emoji after "dog"', () => {
     expect(typeInto(['*x', 'dogcat', '*dog'], 1, 3, '😀')).toBe(
       'text*:"x" text:"dog😀cat" text*:"dog"',
+    );
+  });
+  test('bold "x" | "dogcat" (nothing after), type a space after "dog"', () => {
+    // Left-only shape: "dog" stays plain next to "x" and "cat" becomes an
+    // entity, the same as on main (the loop needs a neighbour on both sides).
+    expect(typeInto(['*x', 'dogcat'], 1, 3, ' ')).toBe(
+      'text*:"x" text:"dog " test-keyword:"cat"',
     );
   });
   // Controls: these settle on main.
