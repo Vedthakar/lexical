@@ -558,6 +558,22 @@ export function $wrapNodesImpl(
     const nodeParent = nodes[i].getParent();
     const block =
       nodeParent === null ? null : $wrappedBlock(nodeParent, blockOf);
+    if (
+      block !== null &&
+      !$isBlockContainer(block) &&
+      block === nodeParent &&
+      $isLeafNode(nodes[i]) &&
+      !INTERNAL_isInlineContent(nodes[i])
+    ) {
+      // A block leaf (a decorator such as a horizontal rule) directly in a
+      // block element that is not a container is wrapped on its own, as in a
+      // container. Taking the element as its block would move the element's
+      // other blocks too, including the one the new elements are inserted
+      // after, which never finishes (#9638).
+      const unit = {block, key: nodes[i].getKey(), run: [nodes[i]]};
+      units.push(unit);
+      continue;
+    }
     if (block === null || !$isBlockContainer(block)) {
       units.push(block && {block, key: block.getKey(), run: null});
       continue;
