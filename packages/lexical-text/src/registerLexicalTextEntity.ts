@@ -72,6 +72,9 @@ export function registerLexicalTextEntity<T extends TextNode>(
     let text = node.getTextContent();
     let currentNode = node;
     let match;
+    // Whether a match at the start of this node is invalid next to the
+    // previous (plain, unmergeable) text node, e.g. "dog" after a bold "x".
+    let skipMatchAtStart = false;
 
     if ($isTextNode(prevSibling)) {
       const previousText = prevSibling.getTextContent();
@@ -109,6 +112,12 @@ export function registerLexicalTextEntity<T extends TextNode>(
         }
       } else if (prevMatch === null || prevMatch.start < previousText.length) {
         return;
+      } else {
+        // The previous node's text ends where this one starts, so a match at
+        // the start of this node only holds if the combined text has it
+        // there too. Converting it anyway would loop with the previous
+        // node's transform, which turns it back into plain text (#9637).
+        skipMatchAtStart = prevMatch.start !== previousText.length;
       }
     }
 
@@ -154,8 +163,9 @@ export function registerLexicalTextEntity<T extends TextNode>(
       if (
         match.start === 0 &&
         $isTextNode(prevSibling) &&
-        prevSibling.isTextEntity()
+        (prevSibling.isTextEntity() || skipMatchAtStart)
       ) {
+        skipMatchAtStart = false;
         prevMatchLengthToSkip += match.end;
         continue;
       }
