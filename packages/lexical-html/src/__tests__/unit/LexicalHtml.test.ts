@@ -42,7 +42,10 @@ const BLOCK_BOUNDARY_SPACE_CASES: [string, string[]][] = [
   ['<div><TAG>a</TAG><p> b</p></div>', ['a', 'b']],
   ['<div>a <TAG><div>b</div></TAG> c</div>', ['a', 'b', 'c']],
 ];
-const INLINE_TAGS_9744 = [
+// The tags #9744 made inline, and long-standing inline tags (<span>, <b>).
+const BLOCK_BOUNDARY_INLINE_TAGS = [
+  'span',
+  'b',
   'bdi',
   'bdo',
   'big',
@@ -439,7 +442,7 @@ describe('HTML', () => {
   });
 
   describe('$generateNodesFromDOM trims a space at a block boundary next to an inline tag (#9750)', () => {
-    for (const tag of INLINE_TAGS_9744) {
+    for (const tag of BLOCK_BOUNDARY_INLINE_TAGS) {
       test.each(BLOCK_BOUNDARY_SPACE_CASES)(`<${tag}>: %s`, (html, lines) => {
         const editor = createHeadlessEditor();
         const dom = new DOMParser().parseFromString(

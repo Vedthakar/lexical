@@ -42,7 +42,10 @@ const BLOCK_BOUNDARY_SPACE_CASES: [string, string[]][] = [
   ['<div><TAG>a</TAG><p> b</p></div>', ['a', 'b']],
   ['<div>a <TAG><div>b</div></TAG> c</div>', ['a', 'b', 'c']],
 ];
-const INLINE_TAGS_9744 = [
+// The tags #9744 made inline, and long-standing inline tags (<span>, <b>).
+const BLOCK_BOUNDARY_INLINE_TAGS = [
+  'span',
+  'b',
   'bdi',
   'bdo',
   'big',
@@ -190,7 +193,7 @@ describe('CoreImportExtension', () => {
   });
 
   describe('trims a space at a block boundary next to an inline tag (#9750)', () => {
-    for (const tag of INLINE_TAGS_9744) {
+    for (const tag of BLOCK_BOUNDARY_INLINE_TAGS) {
       test.each(BLOCK_BOUNDARY_SPACE_CASES)(`<${tag}>: %s`, (html, lines) => {
         using editor = buildEditor();
         importInto(editor, html.replaceAll('TAG', tag));
@@ -343,8 +346,18 @@ describe('CoreImportExtension', () => {
     editor.read(() => {
       const all = $getRoot().getAllTextNodes();
       // With <hr> treated as inline, the trailing space after "a" is kept.
-      const a = all.find(t => t.getTextContent().startsWith('a '));
-      assert(a !== undefined, 'expected "a " (with trailing space)');
+      const a = all.find(t => t.getTextContent() === 'a b');
+      assert(a !== undefined, 'expected "a b" (the space kept)');
+    });
+    // In the <p> form, "a " ends its own block, so the space is trimmed even
+    // with <hr> treated as inline.
+    importInto(editor, '<p>a <hr>b</p>');
+    editor.read(() => {
+      expect(
+        $getRoot()
+          .getAllTextNodes()
+          .map(t => t.getTextContent()),
+      ).toEqual(['a', 'b']);
     });
   });
 
