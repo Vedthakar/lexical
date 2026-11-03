@@ -82,6 +82,7 @@ import {
   $setCompositionKey,
   getCachedClassNameArray,
   internalMarkSiblingsAsDirty,
+  isBlockDomNode,
   isDOMTextNode,
   isHTMLElement,
   isInlineDomNode,
@@ -1691,7 +1692,8 @@ function findTextInLine(text: Text, forward: boolean): null | Text {
       (sibling = forward ? node.nextSibling : node.previousSibling) === null
     ) {
       const parentElement = node.parentElement;
-      if (parentElement === null) {
+      // Text across a block boundary is on another line (#9750)
+      if (parentElement === null || isBlockDomNode(parentElement)) {
         return null;
       }
       node = parentElement;
@@ -1708,6 +1710,9 @@ function findTextInLine(text: Text, forward: boolean): null | Text {
     }
     let descendant: null | Node = node;
     while ((descendant = forward ? node.firstChild : node.lastChild) !== null) {
+      if (isBlockDomNode(descendant)) {
+        return null;
+      }
       node = descendant;
     }
     if (isDOMTextNode(node)) {
