@@ -354,8 +354,9 @@ function $destroyNode(key: NodeKey, parentDOM: null | HTMLElement): void {
   // an element host's container sits inside the host DOM already being removed,
   // where remove() is a harmless no-op on a detached parent.
   if (node !== undefined) {
-    for (const slotKey of $readSlots(node).values()) {
-      const container = $slotContainerForKey(slotKey);
+    const hostDom = activePrevKeyToDOMMap.get(key);
+    for (const [name, slotKey] of $readSlots(node)) {
+      const container = getSlotContainer(hostDom, name);
       $destroyNode(slotKey, null);
       if (container !== null) {
         container.remove();
@@ -531,6 +532,7 @@ function $mountSlotChildren(
   const decoratorHost = $isDecoratorNode(node);
   for (const [name, slotKey] of slots) {
     const container = $createSlotDOM(name);
+    setSlotContainer(hostDom, name, container);
     $applySlotEditable(hostDom, decoratorHost, container);
     hostDom.appendChild(container);
     subTreeTextContent = '';
@@ -576,15 +578,40 @@ function $applySlotTarget(
   }
 }
 
-// @experimental named-slots. A slot value's DOM is mounted directly inside its
-// own `[data-lexical-slot]` container, so the container is that DOM's parent.
-// Resolving by the slotted key (rather than scanning the host's direct children
-// by name) survives the container being relocated out of the host — e.g. a
-// decorator host that moves its slot containers into its decorate() chrome — and
-// can't match a slot subtree's own nested slot container.
-function $slotContainerForKey(slotKey: NodeKey): HTMLElement | null {
-  const slotDom = activePrevKeyToDOMMap.get(slotKey);
-  return slotDom !== undefined ? slotDom.parentElement : null;
+// @experimental named-slots. Each host DOM's slot containers, by slot name,
+// recorded when the reconciler creates them. Resolving through the host (rather
+// than the slotted value's `parentElement`) survives the container being
+// relocated out of the host — e.g. a decorator host that moves its slot
+// containers into its decorate() chrome — can't match a slot subtree's own
+// nested slot container, and stays right when the value's DOM was already
+// reparented in this update: a value moved out of its slot into a new element
+// reuses its DOM, which may be created before the old slot is cleaned up
+// (#9758).
+const slotContainersByHostDOM: WeakMap<
+  HTMLElement,
+  Map<string, HTMLElement>
+> = new WeakMap();
+
+function setSlotContainer(
+  hostDom: HTMLElement,
+  name: string,
+  container: HTMLElement,
+): void {
+  let containers = slotContainersByHostDOM.get(hostDom);
+  if (containers === undefined) {
+    containers = new Map();
+    slotContainersByHostDOM.set(hostDom, containers);
+  }
+  containers.set(name, container);
+}
+
+function getSlotContainer(
+  hostDom: HTMLElement | undefined,
+  name: string,
+): HTMLElement | null {
+  const containers =
+    hostDom !== undefined ? slotContainersByHostDOM.get(hostDom) : undefined;
+  return (containers !== undefined && containers.get(name)) || null;
 }
 
 // @experimental named-slots. Reconcile mirror of `$mountSlotChildren`.
@@ -594,8 +621,8 @@ function $slotContainerForKey(slotKey: NodeKey): HTMLElement | null {
 // new one into the existing container; removed name → destroy + drop its
 // container; new name → mount a fresh container before the first non-slot
 // child so a slot added after the host's initial render stays slots-first.
-// Containers are resolved via `$slotContainerForKey` (the slotted node's DOM
-// parent). Like the mount helper this leaves `subTreeTextContent` unchanged and
+// Containers are resolved via `getSlotContainer` (recorded per host DOM by name
+// at creation). Like the mount helper this leaves `subTreeTextContent` unchanged and
 // returns the concatenated slot text for the caller to fold in slots-first.
 function $reconcileSlotChildren(
   prevNode: LexicalNode,
@@ -606,10 +633,11 @@ function $reconcileSlotChildren(
   const nextSlots = $readSlots(nextNode);
   for (const [name, prevSlotKey] of prevSlots) {
     if (!nextSlots.has(name)) {
-      const staleContainer = $slotContainerForKey(prevSlotKey);
+      const staleContainer = getSlotContainer(hostDom, name);
       $destroyNode(prevSlotKey, null);
       if (staleContainer !== null) {
         staleContainer.remove();
+        slotContainersByHostDOM.get(hostDom)!.delete(name);
       }
     }
   }
@@ -621,11 +649,12 @@ function $reconcileSlotChildren(
   for (const [name, nextSlotKey] of nextSlots) {
     const prevSlotKey = prevSlots.get(name);
     let container =
-      prevSlotKey !== undefined ? $slotContainerForKey(prevSlotKey) : null;
+      prevSlotKey !== undefined ? getSlotContainer(hostDom, name) : null;
     subTreeTextContent = '';
     const saved = $beginCaptureGuard();
     if (container === null) {
       container = $createSlotDOM(name);
+      setSlotContainer(hostDom, name, container);
       // Keep the hidden placeholder slots-first: it must land ahead of the
       // linked-list children (and the terminating <br>) so the leading
       // DOMSlot boundary can skip it; it must not be appended after them.
