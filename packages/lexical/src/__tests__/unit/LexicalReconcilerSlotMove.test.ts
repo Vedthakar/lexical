@@ -17,6 +17,7 @@ import {
   $setSlot,
   defineExtension,
   type LexicalEditor,
+  mountSlotContainer,
 } from 'lexical';
 import {afterEach, describe, expect, test} from 'vitest';
 
@@ -125,5 +126,63 @@ describe('LexicalReconciler: slot value moved into a new element (#9758)', () =>
       test(`value moved by ${move} into a new element ${where} the host, host removed`, () =>
         run(move, true, after));
     }
+  }
+
+  // The host relocates its slot container out of its own DOM (as a decorator's
+  // chrome or useLexicalSlotRef does), then the host is removed: the container
+  // must be removed from where it was moved, whether the value goes with the
+  // host or moves into a new element first.
+  for (const moveValue of [false, true]) {
+    test(`host moves its container, then is removed${moveValue ? ' after its value moves into a new element' : ''}`, () => {
+      using editor = createEditor();
+      let aKey = '';
+      let bKey = '';
+      editor.update(
+        () => {
+          const a = $createTestElementNode();
+          const b = $createTestElementNode().append($createTextNode('moved'));
+          $setSlot(a, 'body', b);
+          $getRoot()
+            .clear()
+            .append(
+              $createTestElementNode().append(a),
+              $createTestElementNode().append($createTextNode('tail')),
+            );
+          aKey = a.getKey();
+          bKey = b.getKey();
+        },
+        {discrete: true},
+      );
+      const target = document.createElement('div');
+      document.body.appendChild(target);
+      roots.push(target);
+      const container = mountSlotContainer(editor, aKey, 'body', target)!;
+      expect(container.parentElement).toBe(target);
+
+      editor.update(
+        () => {
+          const a = (
+            editor.getEditorState()._nodeMap.get(aKey) as TestElementNode
+          ).getLatest();
+          if (moveValue) {
+            const b = (
+              editor.getEditorState()._nodeMap.get(bKey) as TestElementNode
+            ).getLatest();
+            $removeSlot(a, 'body');
+            a.getParentOrThrow().insertBefore(
+              $createTestElementNode().append(b),
+            );
+          }
+          a.remove();
+        },
+        {discrete: true},
+      );
+
+      expect(container.isConnected).toBe(false);
+      expect(target.childNodes.length).toBe(0);
+      const root = editor.getRootElement()!;
+      expect(root.textContent).toBe(moveValue ? 'movedtail' : 'tail');
+      expect(root.innerHTML).toBe(freshHTML(editor));
+    });
   }
 });
