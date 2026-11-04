@@ -1374,7 +1374,10 @@ export function $computeTableCellRectBoundary(
 
   return {
     maxColumn,
-    maxRow,
+    // A row span can reach past the last row when the table transform did
+    // not run (a remote update, imported JSON); the map stops at the last
+    // row, so the rectangle does too (#9759).
+    maxRow: Math.min(maxRow, map.length - 1),
     minColumn,
     minRow,
   };
