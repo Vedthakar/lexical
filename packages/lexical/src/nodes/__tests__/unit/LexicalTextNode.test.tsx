@@ -35,7 +35,7 @@ import {
 import * as React from 'react';
 import {act, createRef, useEffect, useMemo} from 'react';
 import {createRoot} from 'react-dom/client';
-import {afterEach, beforeEach, describe, expect, test} from 'vitest';
+import {afterEach, assert, beforeEach, describe, expect, test} from 'vitest';
 
 import {
   $assertNodeType,
@@ -1049,5 +1049,164 @@ describe('LexicalTextNode tests', () => {
     });
 
     expect(getEditorStateTextContent(editor.getEditorState())).toBe('123');
+  });
+});
+
+// #9767: spliceText (without moveSelection) and setTextContent change the
+// text under a RangeSelection point on the node; the point must stay inside
+// the node so the committed selection is valid and later APIs don't throw.
+describe('LexicalTextNode shrinks keep selection points in range (#9767)', () => {
+  function setup(point: 'anchor' | 'focus', offset: number): LexicalEditor {
+    const editor = createTestEditor();
+    editor.update(
+      () => {
+        const ab = $createTextNode('ab').toggleFormat('bold');
+        const text = $createTextNode('cdefg');
+        $getRoot().clear().append($createParagraphNode().append(ab, text));
+        const selection = text.select(offset, offset);
+        const other = point === 'anchor' ? selection.focus : selection.anchor;
+        other.set(ab.getKey(), 1, 'text');
+      },
+      {discrete: true},
+    );
+    return editor;
+  }
+
+  function $last(): TextNode {
+    return $assertNodeType($getRoot().getLastDescendant(), $isTextNode);
+  }
+
+  function committedPoint(editor: LexicalEditor, point: 'anchor' | 'focus') {
+    return editor.getEditorState().read(() => {
+      const selection = $getSelection();
+      if (!$isRangeSelection(selection)) {
+        throw new Error('expected a RangeSelection');
+      }
+      return {
+        key: selection[point].key,
+        offset: selection[point].offset,
+        size: $last().getTextContentSize(),
+        text: $last().getKey(),
+      };
+    });
+  }
+
+  function expectSplitTextDoesNotThrow(editor: LexicalEditor) {
+    expect(() =>
+      editor.update(
+        () => {
+          $assertNodeType(
+            $getRoot().getFirstDescendant(),
+            $isTextNode,
+          ).splitText(1);
+        },
+        {discrete: true},
+      ),
+    ).not.toThrow();
+  }
+
+  // "cdefg": spliceText(1, 2, '') deletes "de" and leaves "cfg";
+  // setTextContent('c') leaves "c".
+  const cases = [
+    {expected: 1, method: 'spliceText', offset: 2, where: 'inside'},
+    {expected: 2, method: 'spliceText', offset: 4, where: 'after'},
+    {expected: 1, method: 'setTextContent', offset: 2, where: 'inside'},
+    {expected: 1, method: 'setTextContent', offset: 4, where: 'after'},
+  ] as const;
+
+  for (const point of ['anchor', 'focus'] as const) {
+    for (const {expected, method, offset, where} of cases) {
+      test(`${method}: a ${point} ${where} the removed text`, () => {
+        const editor = setup(point, offset);
+        editor.update(
+          () => {
+            if (method === 'spliceText') {
+              $last().spliceText(1, 2, '');
+            } else {
+              $last().setTextContent('c');
+            }
+          },
+          {discrete: true},
+        );
+        const committed = committedPoint(editor, point);
+        expect(committed.key).toBe(committed.text);
+        expect(committed.offset).toBe(expected);
+        expect(committed.offset).toBeLessThanOrEqual(committed.size);
+        expectSplitTextDoesNotThrow(editor);
+      });
+    }
+  }
+
+  test('spliceText: a point after replaced text shifts by the length change', () => {
+    const editor = setup('focus', 4);
+    editor.update(() => $last().spliceText(1, 2, 'XYZ'), {discrete: true});
+    expect(committedPoint(editor, 'focus').offset).toBe(5);
+  });
+
+  test('spliceText: a point at the end of replaced text shifts with it', () => {
+    const editor = setup('focus', 3);
+    editor.update(() => $last().spliceText(1, 2, 'XYZ'), {discrete: true});
+    expect(committedPoint(editor, 'focus').offset).toBe(4);
+  });
+
+  test('spliceText: a point at the start of replaced text stays', () => {
+    const editor = setup('focus', 1);
+    editor.update(() => $last().spliceText(1, 2, 'XYZ'), {discrete: true});
+    expect(committedPoint(editor, 'focus').offset).toBe(1);
+  });
+
+  test('spliceText: a collapsed selection on the node moves with its text', () => {
+    const editor = setup('focus', 4);
+    editor.update(() => $last().select(4, 4), {discrete: true});
+    editor.update(() => $last().spliceText(1, 2, ''), {discrete: true});
+    const anchor = committedPoint(editor, 'anchor');
+    const focus = committedPoint(editor, 'focus');
+    expect([anchor.key, anchor.offset]).toEqual([anchor.text, 2]);
+    expect([focus.key, focus.offset]).toEqual([focus.text, 2]);
+    expectSplitTextDoesNotThrow(editor);
+  });
+
+  test('spliceText and setTextContent leave an element point unchanged', () => {
+    const editor = setup('focus', 4);
+    let paragraphKey = '';
+    editor.update(
+      () => {
+        const selection = $getSelection();
+        assert($isRangeSelection(selection), 'expected a RangeSelection');
+        const paragraph = $assertNodeType(
+          $getRoot().getFirstChild(),
+          $isParagraphNode,
+        );
+        paragraphKey = paragraph.getKey();
+        selection.anchor.set(paragraphKey, 1, 'element');
+      },
+      {discrete: true},
+    );
+    editor.update(() => $last().spliceText(0, 4, ''), {discrete: true});
+    editor.update(() => $last().setTextContent(''), {discrete: true});
+    editor.getEditorState().read(() => {
+      const selection = $getSelection();
+      assert($isRangeSelection(selection), 'expected a RangeSelection');
+      expect([
+        selection.anchor.key,
+        selection.anchor.offset,
+        selection.anchor.type,
+      ]).toEqual([paragraphKey, 1, 'element']);
+    });
+  });
+
+  test('spliceText: a point at an insertion (nothing deleted) stays', () => {
+    const editor = setup('focus', 2);
+    editor.update(() => $last().spliceText(2, 0, 'XY'), {discrete: true});
+    expect(committedPoint(editor, 'focus').offset).toBe(2);
+  });
+
+  test('spliceText with moveSelection still collapses to the inserted text', () => {
+    const editor = setup('focus', 4);
+    editor.update(() => $last().spliceText(1, 2, 'X', true), {discrete: true});
+    const anchor = committedPoint(editor, 'anchor');
+    const focus = committedPoint(editor, 'focus');
+    expect([anchor.key, anchor.offset]).toEqual([anchor.text, 2]);
+    expect([focus.key, focus.offset]).toEqual([focus.text, 2]);
   });
 });
