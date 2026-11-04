@@ -65,6 +65,7 @@ import {
   $updateElementSelectionOnCreateDeleteNode,
   adjustPointOffsetForMergedSibling,
   type BaseSelection,
+  type PointType,
   type RangeSelection,
   type TextPointType,
 } from '../LexicalSelection';
@@ -1156,6 +1157,8 @@ export class TextNode extends LexicalNode implements InlineFormattableNode {
     const self = this.getWritable();
     $recordTextContent(self, text);
     self.__text = text;
+    // Keep selection points on this node inside the new text (#9767)
+    $updateTextPoints(self.__key, point => Math.min(point.offset, text.length));
     return self;
   }
 
@@ -1252,6 +1255,17 @@ export class TextNode extends LexicalNode implements InlineFormattableNode {
         newOffset,
         writableSelf,
         newOffset,
+      );
+    } else {
+      // Keep selection points on this node on the same text (#9767): a point
+      // after the deleted range shifts with the text, a point inside it moves
+      // to where the range started, and a point at a pure insertion stays.
+      const deleteEnd = index + Math.max(0, delCount);
+      $updateTextPoints(writableSelf.__key, point =>
+        point.offset > deleteEnd ||
+        (point.offset === deleteEnd && deleteEnd > index)
+          ? point.offset + handledTextLength - (deleteEnd - index)
+          : Math.min(point.offset, index),
       );
     }
 
@@ -1360,6 +1374,11 @@ export class TextNode extends LexicalNode implements InlineFormattableNode {
       }
     }
 
+    // Read before setTextContent below, which clamps points on this node to
+    // the first part
+    const originalStartOffset = startTextPoint ? startTextPoint.offset : null;
+    const originalEndOffset = endTextPoint ? endTextPoint.offset : null;
+
     if (self.isSegmented()) {
       // Create a new TextNode
       writableNode = $createTextNode(firstPart);
@@ -1407,8 +1426,6 @@ export class TextNode extends LexicalNode implements InlineFormattableNode {
     // generally left biased unless the end point would land on a
     // later node in the split in which case it will prefer the start
     // of that node so they will tend to be on the same node.
-    const originalStartOffset = startTextPoint ? startTextPoint.offset : null;
-    const originalEndOffset = endTextPoint ? endTextPoint.offset : null;
     let startOffset = 0;
     for (const node of splitNodes) {
       if (!(startTextPoint || endTextPoint)) {
@@ -1680,6 +1697,23 @@ function $convertTextDOMNode(domNode: Node): DOMConversionOutput {
     return {node: null};
   }
   return {node: $createTextNode(textContent)};
+}
+
+function $updateTextPoints(
+  key: NodeKey,
+  $getOffset: (point: PointType) => number,
+): void {
+  const selection = $getSelection();
+  if ($isRangeSelection(selection)) {
+    for (const point of selection.getStartEndPoints()) {
+      if (point.key === key && point.type === 'text') {
+        const offset = $getOffset(point);
+        if (offset !== point.offset) {
+          point.set(key, offset, 'text');
+        }
+      }
+    }
+  }
 }
 
 function findTextInLine(text: Text, forward: boolean): null | Text {
