@@ -35,7 +35,7 @@ import {
 import * as React from 'react';
 import {act, createRef, useEffect, useMemo} from 'react';
 import {createRoot} from 'react-dom/client';
-import {afterEach, beforeEach, describe, expect, test} from 'vitest';
+import {afterEach, assert, beforeEach, describe, expect, test} from 'vitest';
 
 import {
   $assertNodeType,
@@ -1141,6 +1141,58 @@ describe('LexicalTextNode shrinks keep selection points in range (#9767)', () =>
     const editor = setup('focus', 4);
     editor.update(() => $last().spliceText(1, 2, 'XYZ'), {discrete: true});
     expect(committedPoint(editor, 'focus').offset).toBe(5);
+  });
+
+  test('spliceText: a point at the end of replaced text shifts with it', () => {
+    const editor = setup('focus', 3);
+    editor.update(() => $last().spliceText(1, 2, 'XYZ'), {discrete: true});
+    expect(committedPoint(editor, 'focus').offset).toBe(4);
+  });
+
+  test('spliceText: a point at the start of replaced text stays', () => {
+    const editor = setup('focus', 1);
+    editor.update(() => $last().spliceText(1, 2, 'XYZ'), {discrete: true});
+    expect(committedPoint(editor, 'focus').offset).toBe(1);
+  });
+
+  test('spliceText: a collapsed selection on the node moves with its text', () => {
+    const editor = setup('focus', 4);
+    editor.update(() => $last().select(4, 4), {discrete: true});
+    editor.update(() => $last().spliceText(1, 2, ''), {discrete: true});
+    const anchor = committedPoint(editor, 'anchor');
+    const focus = committedPoint(editor, 'focus');
+    expect([anchor.key, anchor.offset]).toEqual([anchor.text, 2]);
+    expect([focus.key, focus.offset]).toEqual([focus.text, 2]);
+    expectSplitTextDoesNotThrow(editor);
+  });
+
+  test('spliceText and setTextContent leave an element point unchanged', () => {
+    const editor = setup('focus', 4);
+    let paragraphKey = '';
+    editor.update(
+      () => {
+        const selection = $getSelection();
+        assert($isRangeSelection(selection), 'expected a RangeSelection');
+        const paragraph = $assertNodeType(
+          $getRoot().getFirstChild(),
+          $isParagraphNode,
+        );
+        paragraphKey = paragraph.getKey();
+        selection.anchor.set(paragraphKey, 1, 'element');
+      },
+      {discrete: true},
+    );
+    editor.update(() => $last().spliceText(0, 4, ''), {discrete: true});
+    editor.update(() => $last().setTextContent(''), {discrete: true});
+    editor.getEditorState().read(() => {
+      const selection = $getSelection();
+      assert($isRangeSelection(selection), 'expected a RangeSelection');
+      expect([
+        selection.anchor.key,
+        selection.anchor.offset,
+        selection.anchor.type,
+      ]).toEqual([paragraphKey, 1, 'element']);
+    });
   });
 
   test('spliceText: a point at an insertion (nothing deleted) stays', () => {
