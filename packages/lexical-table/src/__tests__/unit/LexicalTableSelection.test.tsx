@@ -367,6 +367,32 @@ describe('table selection', () => {
         });
       });
     });
+
+    describe('regression #9755', () => {
+      test('getTextContent writes the text of a nested table once', () => {
+        testEnv.editor.update(
+          () => {
+            const nested = $createTableNode().append(
+              $createTableRowNode().append(
+                $createTableCellNode().append(
+                  $createParagraphNode().append($createTextNode('INNER')),
+                ),
+              ),
+            );
+            tableMap.at(0)!.at(0)!.cell.append(nested);
+            const selection = $createTableSelectionFrom(
+              tableNode,
+              tableMap.at(0)!.at(0)!.cell,
+              tableMap.at(-1)!.at(-1)!.cell,
+            );
+            expect(selection.getTextContent()).toBe(
+              '0,0\n\nINNER\t1,0\n0,1\t1,1\n',
+            );
+          },
+          {discrete: true},
+        );
+      });
+    });
   });
 });
 
