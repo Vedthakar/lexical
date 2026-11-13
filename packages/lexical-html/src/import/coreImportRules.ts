@@ -303,6 +303,13 @@ function isInsidePreserveWhitespace(
   return false;
 }
 
+function isBlockForWhitespace(
+  node: Node,
+  wsConfig: WhitespaceImportConfig,
+): boolean {
+  return isBlockDomNode(node) && !wsConfig.isInline(node);
+}
+
 function findAdjacentTextOnLine(
   text: Text,
   forward: boolean,
@@ -315,7 +322,8 @@ function findAdjacentTextOnLine(
       (sibling = forward ? node.nextSibling : node.previousSibling) === null
     ) {
       const parent: Node | null = node.parentNode;
-      if (parent === null) {
+      // Text across a block boundary is on another line (#9750)
+      if (parent === null || isBlockForWhitespace(parent, wsConfig)) {
         return null;
       }
       node = parent;
@@ -326,6 +334,9 @@ function findAdjacentTextOnLine(
     }
     let descendant: Node | null = node;
     while ((descendant = forward ? node.firstChild : node.lastChild) !== null) {
+      if (isBlockForWhitespace(descendant, wsConfig)) {
+        return null;
+      }
       node = descendant;
     }
     if (isDOMTextNode(node)) {

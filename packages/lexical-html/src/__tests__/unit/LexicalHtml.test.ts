@@ -37,6 +37,26 @@ import {
 } from 'lexical/src/__tests__/utils';
 import {assert, describe, expect, test} from 'vitest';
 
+const BLOCK_BOUNDARY_SPACE_CASES: [string, string[]][] = [
+  ['<div><p>a </p><TAG>b</TAG></div>', ['a', 'b']],
+  ['<div><TAG>a</TAG><p> b</p></div>', ['a', 'b']],
+  ['<div>a <TAG><div>b</div></TAG> c</div>', ['a', 'b', 'c']],
+];
+// The tags #9744 made inline, and long-standing inline tags (<span>, <b>).
+const BLOCK_BOUNDARY_INLINE_TAGS = [
+  'span',
+  'b',
+  'bdi',
+  'bdo',
+  'big',
+  'data',
+  'dfn',
+  'font',
+  'nobr',
+  'small',
+  'strike',
+];
+
 describe('HTML', () => {
   type Input = {
     name: string;
@@ -419,6 +439,33 @@ describe('HTML', () => {
     expect(lines('<div><font>a</font><div></div><font>b</font></div>')).toBe(
       'a\nb',
     );
+  });
+
+  describe('$generateNodesFromDOM trims a space at a block boundary next to an inline tag (#9750)', () => {
+    for (const tag of BLOCK_BOUNDARY_INLINE_TAGS) {
+      test.each(BLOCK_BOUNDARY_SPACE_CASES)(`<${tag}>: %s`, (html, lines) => {
+        const editor = createHeadlessEditor();
+        const dom = new DOMParser().parseFromString(
+          html.replaceAll('TAG', tag),
+          'text/html',
+        );
+        editor.update(
+          () => {
+            $getRoot()
+              .clear()
+              .append(...$generateNodesFromDOM(editor, dom));
+          },
+          {discrete: true},
+        );
+        expect(
+          editor.read(() =>
+            $getRoot()
+              .getChildren()
+              .map(node => node.getTextContent()),
+          ),
+        ).toEqual(lines);
+      });
+    }
   });
 
   describe('importDOM preserves dir attribute', () => {

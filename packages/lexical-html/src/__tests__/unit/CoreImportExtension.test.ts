@@ -37,6 +37,26 @@ import {
 } from 'lexical';
 import {assert, describe, expect, test} from 'vitest';
 
+const BLOCK_BOUNDARY_SPACE_CASES: [string, string[]][] = [
+  ['<div><p>a </p><TAG>b</TAG></div>', ['a', 'b']],
+  ['<div><TAG>a</TAG><p> b</p></div>', ['a', 'b']],
+  ['<div>a <TAG><div>b</div></TAG> c</div>', ['a', 'b', 'c']],
+];
+// The tags #9744 made inline, and long-standing inline tags (<span>, <b>).
+const BLOCK_BOUNDARY_INLINE_TAGS = [
+  'span',
+  'b',
+  'bdi',
+  'bdo',
+  'big',
+  'data',
+  'dfn',
+  'font',
+  'nobr',
+  'small',
+  'strike',
+];
+
 function buildEditor() {
   return buildEditorFromExtensions(
     defineExtension({
@@ -172,6 +192,22 @@ describe('CoreImportExtension', () => {
     });
   });
 
+  describe('trims a space at a block boundary next to an inline tag (#9750)', () => {
+    for (const tag of BLOCK_BOUNDARY_INLINE_TAGS) {
+      test.each(BLOCK_BOUNDARY_SPACE_CASES)(`<${tag}>: %s`, (html, lines) => {
+        using editor = buildEditor();
+        importInto(editor, html.replaceAll('TAG', tag));
+        editor.read(() => {
+          expect(
+            $getRoot()
+              .getChildren()
+              .map(node => node.getTextContent()),
+          ).toEqual(lines);
+        });
+      });
+    }
+  });
+
   test('<br> creates a LineBreakNode', () => {
     using editor = buildEditor();
     importInto(editor, '<p>a<br>b</p>');
@@ -304,12 +340,24 @@ describe('CoreImportExtension', () => {
         name: 'host',
       }),
     );
-    importInto(editor, '<p>a <hr>b</p>');
+    // In a <div>: the parser closes a <p> at <hr>, which leaves "a " at the
+    // end of its own block, where the space is trimmed (#9750).
+    importInto(editor, '<div>a <hr>b</div>');
     editor.read(() => {
       const all = $getRoot().getAllTextNodes();
       // With <hr> treated as inline, the trailing space after "a" is kept.
-      const a = all.find(t => t.getTextContent() === 'a ');
-      assert(a !== undefined, 'expected "a " (with trailing space)');
+      const a = all.find(t => t.getTextContent() === 'a b');
+      assert(a !== undefined, 'expected "a b" (the space kept)');
+    });
+    // In the <p> form, "a " ends its own block, so the space is trimmed even
+    // with <hr> treated as inline.
+    importInto(editor, '<p>a <hr>b</p>');
+    editor.read(() => {
+      expect(
+        $getRoot()
+          .getAllTextNodes()
+          .map(t => t.getTextContent()),
+      ).toEqual(['a', 'b']);
     });
   });
 
